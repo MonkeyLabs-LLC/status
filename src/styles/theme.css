@@ -1,0 +1,29 @@
+/* MonkeyLabs status page theme. Overrides Bananapulse's default CSS
+   variables. Keep brand-aligned with Sessions + MonkeyLabs marketing
+   sites — DM Sans typography, accent blue, dark background. */
+
+:root {
+  --bp-bg: #161618;
+  --bp-tx: #f0f0f0;
+  --bp-muted: rgba(255, 255, 255, 0.55);
+  --bp-dim: rgba(255, 255, 255, 0.28);
+  --bp-accent: #3b82f6;
+  --bp-accent-hover: #60a5fa;
+  --bp-card: #1e1e21;
+  --bp-border: rgba(255, 255, 255, 0.08);
+
+  --bp-status-operational: #10b981;
+  --bp-status-degraded: #f59e0b;
+  --bp-status-down: #ef4444;
+  --bp-status-maintenance: #6366f1;
+
+  --bp-font-body: 'DM Sans', system-ui, -apple-system, Segoe UI, sans-serif;
+  --bp-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
+body {
+  font-family: var(--bp-font-body);
+  background: var(--bp-bg);
+  color: var(--bp-tx);
+  -webkit-font-smoothing: antialiased;
+}

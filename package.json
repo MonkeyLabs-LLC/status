@@ -1,0 +1,21 @@
+{
+  "name": "monkeylabs-status",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^5.7.0",
+    "bananapulse": "git+https://github.com/BananaLabs-OSS/Bananapulse.git#52354df"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  }
+}

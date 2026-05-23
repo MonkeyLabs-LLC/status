@@ -1,0 +1,26 @@
+# Build output
+dist/
+.astro/
+
+# Dependencies
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+bun-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Lockfiles — track ONE based on the package manager you actually use.
+# Netlify build uses npm by default (see netlify.toml).
+bun.lock
+bun.lockb
+yarn.lock
+pnpm-lock.yaml

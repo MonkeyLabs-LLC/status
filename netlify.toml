@@ -1,0 +1,30 @@
+# Netlify build config for the MonkeyLabs / Sessions status page.
+# Multi-domain aliasing is configured in the Netlify dashboard (Site
+# settings → Domain management), not here — both `status.monkeylabs.gg`
+# and `status.sessions.gg` point at this single site.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Cache headers: HTML is fresh-ish (60s) so incident updates land quickly
+# after a deploy; built assets carry hashed filenames so they can cache
+# aggressively.
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=60, must-revalidate"
+
+[[headers]]
+  for = "/_astro/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/incidents.xml"
+  [headers.values]
+    Cache-Control = "public, max-age=300"
+    Content-Type = "application/atom+xml; charset=utf-8"
