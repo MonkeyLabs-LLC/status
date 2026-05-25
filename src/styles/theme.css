@@ -1,29 +1,122 @@
-/* MonkeyLabs status page theme. Overrides Bananapulse's default CSS
-   variables. Keep brand-aligned with Sessions + MonkeyLabs marketing
-   sites — DM Sans typography, accent blue, dark background. */
+/* MonkeyLabs status page — Consumer TUI theme.
+   Overrides Bananapulse defaults to match the Sessions design system.
+   Neutral dark palette, DM Sans + DM Mono, infrastructure aesthetic. */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap');
 
 :root {
-  --bp-bg: #161618;
-  --bp-tx: #f0f0f0;
-  --bp-muted: rgba(255, 255, 255, 0.55);
-  --bp-dim: rgba(255, 255, 255, 0.28);
-  --bp-accent: #3b82f6;
-  --bp-accent-hover: #60a5fa;
-  --bp-card: #1e1e21;
-  --bp-border: rgba(255, 255, 255, 0.08);
+  --bp-bg: #0e0e0e;
+  --bp-tx: #e8e8e8;
+  --bp-muted: #808080;
+  --bp-dim: #555555;
+  --bp-accent: #5b9eff;
+  --bp-accent-hover: #7ab4ff;
+  --bp-card: #161616;
+  --bp-border: #2a2a2a;
 
-  --bp-status-operational: #10b981;
-  --bp-status-degraded: #f59e0b;
-  --bp-status-down: #ef4444;
-  --bp-status-maintenance: #6366f1;
+  --bp-status-operational: #6bcf8e;
+  --bp-status-degraded: #f0c757;
+  --bp-status-down: #ef6b6b;
+  --bp-status-maintenance: #5b9eff;
 
-  --bp-font-body: 'DM Sans', system-ui, -apple-system, Segoe UI, sans-serif;
-  --bp-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --bp-font-body: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --bp-font-mono: 'DM Mono', ui-monospace, monospace;
 }
+
+*, *::before, *::after { box-sizing: border-box; }
 
 body {
   font-family: var(--bp-font-body);
   background: var(--bp-bg);
   color: var(--bp-tx);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── TUI Breadcrumb Scope ─── */
+.bp-scope {
+  font-family: var(--bp-font-mono);
+  font-size: 13px;
+  color: var(--bp-muted);
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--bp-border);
+  max-width: 720px;
+  margin: 0 auto;
+}
+.bp-scope a {
+  color: var(--bp-muted);
+  text-decoration: none;
+}
+.bp-scope a:hover { color: var(--bp-tx); }
+.bp-scope .sep { color: #333333; margin: 0 0.5em; }
+.bp-scope .current { color: var(--bp-accent); }
+
+/* ─── Card accents (TUI box-drawing corners) ─── */
+.bp-component,
+.bp-incident-card {
+  position: relative;
+  background: var(--bp-card);
+  border: 1px solid var(--bp-border);
+  border-radius: 6px;
+}
+.bp-component::before,
+.bp-incident-card::before {
+  content: '┌';
+  position: absolute;
+  top: -10px;
+  left: -2px;
+  font-family: var(--bp-font-mono);
+  font-size: 14px;
+  color: var(--bp-accent);
+  background: var(--bp-bg);
+  padding: 0 4px;
+}
+.bp-component::after,
+.bp-incident-card::after {
+  content: '┘';
+  position: absolute;
+  bottom: -10px;
+  right: -2px;
+  font-family: var(--bp-font-mono);
+  font-size: 14px;
+  color: var(--bp-accent);
+  background: var(--bp-bg);
+  padding: 0 4px;
+}
+
+/* ─── Status dot pulse ─── */
+.bp-status-dot {
+  animation: bp-pulse 2.4s ease-in-out infinite;
+}
+@keyframes bp-pulse {
+  0%, 60% { opacity: 1; }
+  60.01%, 100% { opacity: 0.35; }
+}
+
+/* ─── Overall banner ─── */
+.bp-overall {
+  font-family: var(--bp-font-mono);
+  text-transform: lowercase;
+}
+
+/* ─── Timestamps and metadata in mono ─── */
+.bp-timestamp,
+.bp-incident-time,
+.bp-update-time {
+  font-family: var(--bp-font-mono);
+  font-size: 12px;
+  color: var(--bp-muted);
+}
+
+/* ─── Links ─── */
+a { color: var(--bp-accent); }
+a:hover { color: var(--bp-accent-hover); }
+
+/* ─── Selection ─── */
+::selection {
+  background: rgba(91, 158, 255, 0.15);
+  color: var(--bp-tx);
 }
