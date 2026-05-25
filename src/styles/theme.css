@@ -60,7 +60,7 @@ body {
   position: relative;
   background: var(--bp-card);
   border: 1px solid var(--bp-border);
-  border-radius: 6px;
+  border-radius: 3px;
 }
 .bp-component::before,
 .bp-incident-card::before {
