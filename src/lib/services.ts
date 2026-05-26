@@ -1,72 +1,20 @@
-import type { Service, PaginatedQuery, DayStatus } from './types';
+import type { Service, PaginatedQuery } from './types';
+import { fetchEvolutionStatus } from './evolution';
 
-/** Generate a 90-day uptime array: mostly ok, a few degraded days scattered in. */
-function makeUptime(degradedDays: number[]): DayStatus[] {
-  const days: DayStatus[] = [];
-  for (let i = 0; i < 90; i++) {
-    days.push(degradedDays.includes(i) ? 'deg' : 'ok');
-  }
-  return days;
-}
-
-const SERVICES: Service[] = [
-  {
-    id: 'sessions-api',
-    name: 'API',
-    product: 'sessions',
-    status: 'operational',
-    uptime90d: makeUptime([12, 47]),
-  },
-  {
-    id: 'sessions-provisioner',
-    name: 'Provisioner',
-    product: 'sessions',
-    status: 'operational',
-    uptime90d: makeUptime([47]),
-  },
-  {
-    id: 'sessions-game-servers',
-    name: 'Game Servers',
-    product: 'sessions',
-    status: 'operational',
-    uptime90d: makeUptime([30, 47, 88]),
-  },
-  {
-    id: 'sessions-payments',
-    name: 'Payments',
-    product: 'sessions',
-    status: 'operational',
-    uptime90d: makeUptime([]),
-  },
-  {
-    id: 'sessions-email',
-    name: 'Email',
-    product: 'sessions',
-    status: 'operational',
-    uptime90d: makeUptime([5]),
-  },
-  {
-    id: 'sessions-frontend',
-    name: 'Frontend',
-    product: 'sessions',
-    status: 'operational',
-    uptime90d: makeUptime([47, 48]),
-  },
-];
-
-export function getServices(query: PaginatedQuery = {}): Service[] {
+export async function getServices(query: PaginatedQuery = {}): Promise<Service[]> {
   const { limit = 50, offset = 0, product } = query;
-  let result = SERVICES;
-  if (product) {
-    result = result.filter(s => s.product === product);
-  }
+  const data = await fetchEvolutionStatus();
+  let result = data.services;
+  if (product) result = result.filter(s => s.product === product);
   return result.slice(offset, offset + limit);
 }
 
-export function getService(id: string): Service | undefined {
-  return SERVICES.find(s => s.id === id);
+export async function getService(id: string): Promise<Service | undefined> {
+  const data = await fetchEvolutionStatus();
+  return data.services.find(s => s.id === id);
 }
 
-export function getServicesByProduct(product: string): Service[] {
-  return SERVICES.filter(s => s.product === product);
+export async function getServicesByProduct(product: string): Promise<Service[]> {
+  const data = await fetchEvolutionStatus();
+  return data.services.filter(s => s.product === product);
 }

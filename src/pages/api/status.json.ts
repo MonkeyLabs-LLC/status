@@ -4,13 +4,13 @@ import { getActiveIncidents } from '../../lib/incidents';
 import { getUpcomingMaintenances } from '../../lib/maintenance';
 import { worstStatus, statusToState } from '../../lib/types';
 
-export const GET: APIRoute = ({ locals }) => {
+export const GET: APIRoute = async ({ locals }) => {
   const scope = (locals as any).scope as string | null;
 
-  const services = getServices({ product: scope || undefined });
+  const services = await getServices({ product: scope || undefined });
   const overall = worstStatus(services);
-  const activeIncidents = getActiveIncidents(scope || undefined);
-  const maintenances = getUpcomingMaintenances(scope || undefined);
+  const activeIncidents = await getActiveIncidents(scope || undefined);
+  const maintenances = await getUpcomingMaintenances(scope || undefined);
 
   const body = {
     status: overall,

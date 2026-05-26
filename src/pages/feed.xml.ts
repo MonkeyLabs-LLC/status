@@ -3,9 +3,9 @@ import { getIncidents } from '../lib/incidents';
 import { SITE_TITLE, STATUS_DOMAIN } from '../lib/brand';
 import { incidentStatusLabel, severityLabel } from '../lib/types';
 
-export const GET: APIRoute = ({ locals }) => {
+export const GET: APIRoute = async ({ locals }) => {
   const scope = (locals as any).scope as string | null;
-  const incidents = getIncidents({ product: scope || undefined, limit: 20 });
+  const incidents = await getIncidents({ product: scope || undefined, limit: 20 });
 
   const feedUrl = `https://${STATUS_DOMAIN}/feed.xml`;
   const siteUrl = `https://${STATUS_DOMAIN}`;

@@ -14,16 +14,16 @@ import Breadcrumbs from '../components/Breadcrumbs.astro';
 import StatusOverall from '../components/StatusOverall.astro';
 import IncidentCard from '../components/IncidentCard.astro';
 import { getProducts } from '../lib/products';
-import { getServicesByProduct, getServices } from '../lib/services';
+import { getServices } from '../lib/services';
 import { getActiveIncidents } from '../lib/incidents';
 import { worstStatus, statusToState, statusLabel, statusPillClass } from '../lib/types';
 import type { Product } from '../lib/types';
 
 const allProducts = getProducts();
-const allServices = getServices();
+const allServices = await getServices();
 const overallStatus = worstStatus(allServices);
 const bodyState = statusToState(overallStatus);
-const activeIncidents = getActiveIncidents();
+const activeIncidents = await getActiveIncidents();
 ---
 <Default bodyState={bodyState}>
   <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
@@ -46,7 +46,7 @@ const activeIncidents = getActiveIncidents();
       <div class="section-eyebrow">Products</div>
       <div class="brand-grid">
         {allProducts.map((product: Product) => {
-          const services = getServicesByProduct(product.id);
+          const services = allServices.filter(s => s.product === product.id);
           const status = services.length > 0 ? worstStatus(services) : 'operational' as const;
           const pillClass = statusPillClass(status);
           const label = statusLabel(status);
