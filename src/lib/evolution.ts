@@ -6,7 +6,7 @@
 
 import type { Service, ServiceStatus, Incident, IncidentSeverity, IncidentStatus, TimelineEntry, Maintenance } from './types';
 
-const EVOLUTION_URL = import.meta.env.STATUS_DATA_URL || 'https://api.sessions.gg';
+const EVOLUTION_URL = 'https://api.sessions.gg';
 const FETCH_TIMEOUT = 5000;
 
 interface EvolutionComponent {
@@ -128,20 +128,23 @@ export async function fetchEvolutionStatus() {
     return cachedData;
   }
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+  const empty = {
+    services: [] as Service[],
+    incidents: [] as Incident[],
+    maintenances: [] as Maintenance[],
+    overall: 'operational' as ServiceStatus,
+    fetchedAt: Date.now(),
+  };
 
+  try {
     const res = await fetch(`${EVOLUTION_URL}/api/status`, {
-      signal: controller.signal,
       headers: { 'Accept': 'application/json' },
     });
-    clearTimeout(timeout);
 
     if (!res.ok) throw new Error(`status ${res.status}`);
 
     const data: EvolutionStatusResponse = await res.json();
-    const product = 'sessions'; // Only one product for now
+    const product = 'sessions';
 
     const services = flattenComponents(data.components || [], product);
     const incidents = (data.incidents || []).map(i => mapIncident(i, product));
@@ -150,15 +153,8 @@ export async function fetchEvolutionStatus() {
 
     cachedData = { services, incidents, maintenances, overall, fetchedAt: Date.now() };
     return cachedData;
-  } catch {
-    // Evolution is down — return cached or empty
-    if (cachedData) return cachedData;
-    return {
-      services: [],
-      incidents: [],
-      maintenances: [],
-      overall: 'operational' as ServiceStatus,
-      fetchedAt: Date.now(),
-    };
+  } catch (_e) {
+    // Evolution unreachable — return cached data or empty
+    return cachedData || empty;
   }
 }
