@@ -2,158 +2,80 @@
 /**
  * Overview page (/).
  *
- * Single-product behavior: when only one product is launched, render that
- * product's detail view inline at / — no brand grid, no redirect.
+ * This page is only served for umbrella scope (status.monkeylabs.gg, localhost).
+ * Scoped hosts (e.g. status.sessions.gg) have / rewritten to /sessions by middleware,
+ * so they never reach this page.
  *
- * Multi-product: render brand grid overview with StatusOverall hero + BrandCard
- * grid + active incidents.
+ * Always renders the brand grid overview with StatusOverall hero + BrandCard
+ * grid + active incidents across all products.
  */
 import Default from '../layouts/Default.astro';
 import StatusOverall from '../components/StatusOverall.astro';
-import ServiceRow from '../components/ServiceRow.astro';
 import IncidentCard from '../components/IncidentCard.astro';
-import MaintenanceBanner from '../components/MaintenanceBanner.astro';
-import EmptyState from '../components/EmptyState.astro';
-import { getLaunchedProducts, getProducts } from '../lib/products';
+import { getProducts } from '../lib/products';
 import { getServicesByProduct, getServices } from '../lib/services';
-import { getActiveIncidents, getResolvedIncidents } from '../lib/incidents';
-import { getUpcomingMaintenances } from '../lib/maintenance';
+import { getActiveIncidents } from '../lib/incidents';
 import { worstStatus, statusToState, statusLabel, statusPillClass } from '../lib/types';
 import type { Product } from '../lib/types';
 
-const launched = getLaunchedProducts();
 const allProducts = getProducts();
-const singleProduct = launched.length === 1;
-
-// Compute state for both modes
-let bodyState = 'working';
-let singleServices: ReturnType<typeof getServicesByProduct> = [];
-let singleActive: ReturnType<typeof getActiveIncidents> = [];
-let singleResolved: ReturnType<typeof getResolvedIncidents> = [];
-let singleMaintenances: ReturnType<typeof getUpcomingMaintenances> = [];
-
-let multiActive: ReturnType<typeof getActiveIncidents> = [];
-
-if (singleProduct) {
-  const product = launched[0];
-  singleServices = getServicesByProduct(product.id);
-  const overall = worstStatus(singleServices);
-  bodyState = statusToState(overall);
-  singleActive = getActiveIncidents(product.id);
-  singleResolved = getResolvedIncidents({ product: product.id, limit: 3 });
-  singleMaintenances = getUpcomingMaintenances(product.id);
-} else {
-  const allServices = getServices();
-  const overall = worstStatus(allServices);
-  bodyState = statusToState(overall);
-  multiActive = getActiveIncidents();
-}
-
-const overallStatus = singleProduct
-  ? worstStatus(singleServices)
-  : worstStatus(getServices());
+const allServices = getServices();
+const overallStatus = worstStatus(allServices);
+const bodyState = statusToState(overallStatus);
+const activeIncidents = getActiveIncidents();
 ---
-<Default title={singleProduct ? `${launched[0].name} Status` : undefined} bodyState={bodyState}>
+<Default bodyState={bodyState}>
   <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
     <StatusOverall status={overallStatus} />
 
-    {singleProduct ? (
-      <>
-        {singleMaintenances.length > 0 && (
-          <section style="margin-bottom: 1.5em;">
-            <div class="section-eyebrow">Scheduled maintenance</div>
-            {singleMaintenances.map((m) => (
-              <MaintenanceBanner maintenance={m} />
-            ))}
-          </section>
-        )}
-
-        {singleActive.length > 0 && (
-          <section style="margin-bottom: 1.5em;">
-            <div class="section-eyebrow">Active incidents</div>
-            {singleActive.map((inc) => (
-              <IncidentCard incident={inc} showTimeline={false} />
-            ))}
-          </section>
-        )}
-
-        <section style="margin-bottom: 2em;">
-          <div class="section-eyebrow">Services</div>
-          <div class="service-list">
-            {singleServices.map((svc) => (
-              <ServiceRow service={svc} />
-            ))}
-          </div>
-        </section>
-
-        {singleResolved.length > 0 && (
-          <section>
-            <div class="section-eyebrow">Recent incidents</div>
-            {singleResolved.map((inc) => (
-              <IncidentCard incident={inc} showTimeline={false} />
-            ))}
-            <div style="text-align: center; padding-top: 1em;">
-              <a href="/history" class="btn btn-primary">View incident history</a>
-            </div>
-          </section>
-        )}
-
-        {singleResolved.length === 0 && singleActive.length === 0 && (
-          <EmptyState message="No incidents reported in the past 90 days." />
-        )}
-      </>
-    ) : (
-      <>
-        {multiActive.length > 0 && (
-          <section style="margin-bottom: 1.5em;">
-            <div class="section-eyebrow">Active incidents</div>
-            {multiActive.map((inc) => (
-              <IncidentCard incident={inc} showTimeline={false} />
-            ))}
-          </section>
-        )}
-
-        <section>
-          <div class="section-eyebrow">Products</div>
-          <div class="brand-grid">
-            {allProducts.map((product: Product) => {
-              const services = getServicesByProduct(product.id);
-              const status = services.length > 0 ? worstStatus(services) : 'operational' as const;
-              const pillClass = statusPillClass(status);
-              const label = statusLabel(status);
-
-              return product.launched ? (
-                <a href={`/${product.id}`} class="game-card brand-card">
-                  <div class="game-card-top">
-                    <div class="game-info">
-                      <div class="game-name">{product.name}</div>
-                      <div class="game-tag">{product.tag}</div>
-                    </div>
-                  </div>
-                  <div class="game-foot">
-                    <span class={`status-pill ${pillClass}`}>
-                      <span class="dot"></span>{label}
-                    </span>
-                    <span class="service-count">{services.length} services</span>
-                  </div>
-                </a>
-              ) : (
-                <div class="game-card brand-card soon">
-                  <div class="game-card-top">
-                    <div class="game-info">
-                      <div class="game-name">{product.name}</div>
-                      <div class="game-tag">{product.tag}</div>
-                    </div>
-                  </div>
-                  <div class="game-foot">
-                    <span class="service-count">Coming soon</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      </>
+    {activeIncidents.length > 0 && (
+      <section style="margin-bottom: 1.5em;">
+        <div class="section-eyebrow">Active incidents</div>
+        {activeIncidents.map((inc) => (
+          <IncidentCard incident={inc} showTimeline={false} />
+        ))}
+      </section>
     )}
+
+    <section>
+      <div class="section-eyebrow">Products</div>
+      <div class="brand-grid">
+        {allProducts.map((product: Product) => {
+          const services = getServicesByProduct(product.id);
+          const status = services.length > 0 ? worstStatus(services) : 'operational' as const;
+          const pillClass = statusPillClass(status);
+          const label = statusLabel(status);
+
+          return product.launched ? (
+            <a href={`/${product.id}`} class="game-card brand-card">
+              <div class="game-card-top">
+                <div class="game-info">
+                  <div class="game-name">{product.name}</div>
+                  <div class="game-tag">{product.tag}</div>
+                </div>
+              </div>
+              <div class="game-foot">
+                <span class={`status-pill ${pillClass}`}>
+                  <span class="dot"></span>{label}
+                </span>
+                <span class="service-count">{services.length} services</span>
+              </div>
+            </a>
+          ) : (
+            <div class="game-card brand-card soon">
+              <div class="game-card-top">
+                <div class="game-info">
+                  <div class="game-name">{product.name}</div>
+                  <div class="game-tag">{product.tag}</div>
+                </div>
+              </div>
+              <div class="game-foot">
+                <span class="service-count">Coming soon</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   </div>
 </Default>
