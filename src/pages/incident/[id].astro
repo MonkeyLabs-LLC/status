@@ -1,0 +1,39 @@
+---
+import Default from '../../layouts/Default.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import IncidentCard from '../../components/IncidentCard.astro';
+import { getIncident } from '../../lib/incidents';
+import { getProduct } from '../../lib/products';
+
+const { id } = Astro.params;
+const incident = id ? getIncident(id) : undefined;
+
+if (!incident) {
+  return new Response('Not found', { status: 404 });
+}
+
+const product = getProduct(incident.product);
+const scope = (Astro.locals as any).scope as string | null;
+
+// Determine body state from incident severity
+const bodyState = incident.status === 'resolved'
+  ? 'working'
+  : incident.severity === 'major'
+    ? 'outage'
+    : incident.severity === 'moderate'
+      ? 'degraded'
+      : 'working';
+---
+<Default title={incident.title} bodyState={bodyState}>
+  <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
+    <Breadcrumbs items={[
+      { label: 'Status', href: '/' },
+      ...(product && scope === null ? [{ label: product.name, href: `/${product.id}` }] : []),
+      { label: incident.title },
+    ]} />
+
+    <div style="margin-top: 1em;">
+      <IncidentCard incident={incident} showTimeline={true} />
+    </div>
+  </div>
+</Default>

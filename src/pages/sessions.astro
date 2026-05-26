@@ -1,0 +1,83 @@
+---
+import Default from '../layouts/Default.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import StatusOverall from '../components/StatusOverall.astro';
+import ServiceRow from '../components/ServiceRow.astro';
+import IncidentCard from '../components/IncidentCard.astro';
+import MaintenanceBanner from '../components/MaintenanceBanner.astro';
+import EmptyState from '../components/EmptyState.astro';
+import { getProduct } from '../lib/products';
+import { getServicesByProduct } from '../lib/services';
+import { getActiveIncidents, getResolvedIncidents } from '../lib/incidents';
+import { getUpcomingMaintenances } from '../lib/maintenance';
+import { worstStatus, statusToState } from '../lib/types';
+
+const product = getProduct('sessions');
+if (!product) return Astro.redirect('/');
+
+const services = getServicesByProduct('sessions');
+const overall = worstStatus(services);
+const bodyState = statusToState(overall);
+
+const activeIncidents = getActiveIncidents('sessions');
+const resolvedIncidents = getResolvedIncidents({ product: 'sessions', limit: 3 });
+const maintenances = getUpcomingMaintenances('sessions');
+
+const scope = (Astro.locals as any).scope as string | null;
+const showBreadcrumbs = scope === null; // Only show breadcrumbs on umbrella scope
+---
+<Default title="Sessions Status" bodyState={bodyState}>
+  <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
+    {showBreadcrumbs && (
+      <Breadcrumbs items={[
+        { label: 'Status', href: '/' },
+        { label: 'Sessions' },
+      ]} />
+    )}
+
+    <StatusOverall status={overall} />
+
+    {maintenances.length > 0 && (
+      <section style="margin-bottom: 1.5em;">
+        <div class="section-eyebrow">Scheduled maintenance</div>
+        {maintenances.map((m) => (
+          <MaintenanceBanner maintenance={m} />
+        ))}
+      </section>
+    )}
+
+    {activeIncidents.length > 0 && (
+      <section style="margin-bottom: 1.5em;">
+        <div class="section-eyebrow">Active incidents</div>
+        {activeIncidents.map((inc) => (
+          <IncidentCard incident={inc} showTimeline={false} />
+        ))}
+      </section>
+    )}
+
+    <section style="margin-bottom: 2em;">
+      <div class="section-eyebrow">Services</div>
+      <div class="service-list">
+        {services.map((svc) => (
+          <ServiceRow service={svc} />
+        ))}
+      </div>
+    </section>
+
+    {resolvedIncidents.length > 0 && (
+      <section>
+        <div class="section-eyebrow">Recent incidents</div>
+        {resolvedIncidents.map((inc) => (
+          <IncidentCard incident={inc} showTimeline={false} />
+        ))}
+        <div style="text-align: center; padding-top: 1em;">
+          <a href="/history" class="btn btn-primary">View incident history</a>
+        </div>
+      </section>
+    )}
+
+    {resolvedIncidents.length === 0 && activeIncidents.length === 0 && (
+      <EmptyState message="No incidents reported in the past 90 days." />
+    )}
+  </div>
+</Default>

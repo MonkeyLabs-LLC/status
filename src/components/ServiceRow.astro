@@ -1,0 +1,24 @@
+---
+import type { Service } from '../lib/types';
+import { statusLabel, statusPillClass } from '../lib/types';
+import UptimeBar from './UptimeBar.astro';
+
+interface Props {
+  service: Service;
+}
+
+const { service } = Astro.props;
+const pillClass = statusPillClass(service.status);
+const label = statusLabel(service.status);
+---
+<div class="service-row">
+  <span class="service-name">{service.name}</span>
+  <span class="service-status">
+    <span class={`status-pill ${pillClass}`}>
+      <span class="dot"></span>{label}
+    </span>
+  </span>
+  <div class="service-uptime">
+    <UptimeBar days={service.uptime90d} />
+  </div>
+</div>

@@ -1,0 +1,41 @@
+---
+import { COMPANY_NAME } from '../lib/brand';
+
+const scope = (Astro.locals as any).scope as string | null;
+
+// Adapt brand display per scope
+let brandName = 'status.' + COMPANY_NAME.toLowerCase() + '.gg';
+let brandHref = '/';
+let byLine = '';
+
+if (scope === 'sessions') {
+  brandName = 'status.sessions.gg';
+  byLine = `by ${COMPANY_NAME.toLowerCase()}`;
+} else if (scope === 'matches') {
+  brandName = 'status.matches.gg';
+  byLine = `by ${COMPANY_NAME.toLowerCase()}`;
+} else if (scope === 'rooms') {
+  brandName = 'status.rooms.gg';
+  byLine = `by ${COMPANY_NAME.toLowerCase()}`;
+}
+---
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand-block">
+      <a href={brandHref} class="brand">
+        <div class="brand-text">
+          <span class="brand-name">{brandName}</span>
+          {byLine && (
+            <div class="brand-meta">
+              <span class="by">{byLine}</span>
+            </div>
+          )}
+        </div>
+      </a>
+    </div>
+    <div class="topbar-links">
+      <a href="/history">History</a>
+      <a href="/feed.xml">Feed</a>
+    </div>
+  </div>
+</header>

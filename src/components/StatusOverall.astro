@@ -1,0 +1,30 @@
+---
+import type { ServiceStatus } from '../lib/types';
+interface Props {
+  status: ServiceStatus;
+}
+
+const { status } = Astro.props;
+
+const isHealthy = status === 'operational';
+const bannerMessage = isHealthy
+  ? 'All systems operational'
+  : status === 'degraded'
+    ? 'Some systems are experiencing issues'
+    : status === 'outage'
+      ? 'Major outage in progress'
+      : 'Scheduled maintenance in progress';
+---
+{isHealthy || status === 'maintenance' ? (
+  <div class="status-banner">
+    <div class="banner-head">
+      <span class="banner-dot"></span>
+      {bannerMessage}
+    </div>
+  </div>
+) : (
+  <div class="top-alert">
+    <span class="dot"></span>
+    {bannerMessage}
+  </div>
+)}

@@ -1,0 +1,35 @@
+---
+interface Props {
+  currentPage: number;
+  totalPages: number;
+  basePath: string;
+}
+
+const { currentPage, totalPages, basePath } = Astro.props;
+
+// Don't render if only one page
+if (totalPages <= 1) return;
+
+const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+---
+<nav class="pagination" aria-label="Pagination">
+  {currentPage > 1 ? (
+    <a href={`${basePath}?page=${currentPage - 1}`} class="pagination-btn">&larr; Prev</a>
+  ) : (
+    <span class="pagination-btn disabled">&larr; Prev</span>
+  )}
+
+  {pages.map((p) => (
+    p === currentPage ? (
+      <span class="pagination-btn active">{p}</span>
+    ) : (
+      <a href={`${basePath}?page=${p}`} class="pagination-btn">{p}</a>
+    )
+  ))}
+
+  {currentPage < totalPages ? (
+    <a href={`${basePath}?page=${currentPage + 1}`} class="pagination-btn">Next &rarr;</a>
+  ) : (
+    <span class="pagination-btn disabled">Next &rarr;</span>
+  )}
+</nav>

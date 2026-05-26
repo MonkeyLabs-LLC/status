@@ -1,6 +1,7 @@
 # Build output
 dist/
 .astro/
+.netlify/
 
 # Dependencies
 node_modules/

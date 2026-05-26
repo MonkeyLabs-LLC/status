@@ -1,0 +1,28 @@
+---
+import type { Incident } from '../lib/types';
+import { severityLabel, severityClass, incidentStatusLabel, formatDate } from '../lib/types';
+
+interface Props {
+  incident: Incident;
+}
+
+const { incident } = Astro.props;
+
+// Use the last timeline entry body as summary, or a fallback
+const summary = incident.timeline.length > 0
+  ? incident.timeline[incident.timeline.length - 1].body
+  : '';
+---
+<div class="history-item">
+  <div class="history-header">
+    <h3 class="history-title">
+      <a href={`/incident/${incident.id}`}>{incident.title}</a>
+    </h3>
+    <div class="incident-badges">
+      <span class={`badge ${severityClass(incident.severity)}`}>{severityLabel(incident.severity)}</span>
+      <span class="badge status-badge">{incidentStatusLabel(incident.status)}</span>
+    </div>
+  </div>
+  <div class="history-date">{formatDate(incident.started)}</div>
+  {summary && <p class="history-summary">{summary}</p>}
+</div>
