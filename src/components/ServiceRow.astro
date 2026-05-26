@@ -5,13 +5,16 @@ import UptimeBar from './UptimeBar.astro';
 
 interface Props {
   service: Service;
+  productId: string;
 }
 
-const { service } = Astro.props;
+const { service, productId } = Astro.props;
 const pillClass = statusPillClass(service.status);
 const label = statusLabel(service.status);
+const scope = (Astro.locals as any).scope as string | null;
+const href = scope ? `/${service.id}` : `/${productId}/${service.id}`;
 ---
-<div class="service-row">
+<a href={href} class="service-row" style="text-decoration: none; color: inherit; display: block;">
   <span class="service-name">{service.name}</span>
   <span class="service-status">
     <span class={`status-pill ${pillClass}`}>
@@ -21,4 +24,4 @@ const label = statusLabel(service.status);
   <div class="service-uptime">
     <UptimeBar days={service.uptime90d} />
   </div>
-</div>
+</a>

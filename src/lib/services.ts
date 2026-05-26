@@ -63,6 +63,10 @@ export function getServices(query: PaginatedQuery = {}): Service[] {
   return result.slice(offset, offset + limit);
 }
 
+export function getService(id: string): Service | undefined {
+  return SERVICES.find(s => s.id === id);
+}
+
 export function getServicesByProduct(product: string): Service[] {
   return SERVICES.filter(s => s.product === product);
 }

@@ -9,6 +9,7 @@ const INCIDENTS: Incident[] = [
     severity: 'minor',
     status: 'investigating',
     product: 'sessions',
+    affects: ['sessions-api'],
     started: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
     timeline: [
       {
@@ -24,6 +25,7 @@ const INCIDENTS: Incident[] = [
     severity: 'moderate',
     status: 'resolved',
     product: 'sessions',
+    affects: ['sessions-provisioner', 'sessions-game-servers'],
     started: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString(),
     resolved: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     timeline: [
@@ -52,28 +54,25 @@ const INCIDENTS: Incident[] = [
 ];
 
 export function getIncidents(query: PaginatedQuery = {}): Incident[] {
-  const { limit = 50, offset = 0, product } = query;
+  const { limit = 50, offset = 0, product, service } = query;
   let result = INCIDENTS;
-  if (product) {
-    result = result.filter(i => i.product === product);
-  }
+  if (product) result = result.filter(i => i.product === product);
+  if (service) result = result.filter(i => i.affects?.includes(service));
   return result.slice(offset, offset + limit);
 }
 
-export function getActiveIncidents(product?: string): Incident[] {
+export function getActiveIncidents(product?: string, service?: string): Incident[] {
   let result = INCIDENTS.filter(i => i.status !== 'resolved');
-  if (product) {
-    result = result.filter(i => i.product === product);
-  }
+  if (product) result = result.filter(i => i.product === product);
+  if (service) result = result.filter(i => i.affects?.includes(service));
   return result;
 }
 
 export function getResolvedIncidents(query: PaginatedQuery = {}): Incident[] {
-  const { limit = 10, offset = 0, product } = query;
+  const { limit = 10, offset = 0, product, service } = query;
   let result = INCIDENTS.filter(i => i.status === 'resolved');
-  if (product) {
-    result = result.filter(i => i.product === product);
-  }
+  if (product) result = result.filter(i => i.product === product);
+  if (service) result = result.filter(i => i.affects?.includes(service));
   return result.slice(offset, offset + limit);
 }
 

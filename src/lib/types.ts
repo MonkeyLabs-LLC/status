@@ -26,6 +26,7 @@ export interface Incident {
   severity: IncidentSeverity;
   status: IncidentStatus;
   product: string;
+  affects?: string[]; // service IDs affected by this incident
   started: string;   // ISO 8601
   resolved?: string; // ISO 8601
   timeline: TimelineEntry[];
@@ -52,6 +53,7 @@ export interface PaginatedQuery {
   limit?: number;
   offset?: number;
   product?: string;
+  service?: string;
 }
 
 /** Maps ServiceStatus to the body state class name. */

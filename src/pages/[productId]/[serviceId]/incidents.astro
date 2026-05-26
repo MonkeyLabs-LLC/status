@@ -1,0 +1,64 @@
+---
+import Default from '../../../layouts/Default.astro';
+import Breadcrumbs from '../../../components/Breadcrumbs.astro';
+import IncidentHistoryItem from '../../../components/IncidentHistoryItem.astro';
+import Pagination from '../../../components/Pagination.astro';
+import EmptyState from '../../../components/EmptyState.astro';
+import { getProduct } from '../../../lib/products';
+import { getService } from '../../../lib/services';
+import { getIncidents } from '../../../lib/incidents';
+import { COMPANY_NAME } from '../../../lib/brand';
+
+const { productId, serviceId } = Astro.params;
+const product = productId ? getProduct(productId) : undefined;
+const service = serviceId ? getService(serviceId) : undefined;
+if (!product || !service || service.product !== product.id) {
+  return new Response('Not found', { status: 404 });
+}
+
+const scope = (Astro.locals as any).scope as string | null;
+
+const PAGE_SIZE = 10;
+const pageParam = Astro.url.searchParams.get('page');
+const currentPage = Math.max(1, parseInt(pageParam || '1', 10) || 1);
+
+const allIncidents = getIncidents({ product: product.id, service: service.id });
+const totalPages = Math.max(1, Math.ceil(allIncidents.length / PAGE_SIZE));
+const offset = (currentPage - 1) * PAGE_SIZE;
+const incidents = allIncidents.slice(offset, offset + PAGE_SIZE);
+
+const productHref = scope ? '/' : `/${product.id}`;
+const serviceHref = scope ? `/${service.id}` : `/${product.id}/${service.id}`;
+const basePath = scope ? `/${service.id}/incidents` : `/${product.id}/${service.id}/incidents`;
+---
+<Default title={`${service.name} Incidents — ${product.name}`}>
+  <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
+    {scope ? (
+      <Breadcrumbs items={[
+        { label: product.name, href: '/' },
+        { label: service.name, href: `/${service.id}` },
+        { label: 'Incidents' },
+      ]} />
+    ) : (
+      <Breadcrumbs items={[
+        { label: COMPANY_NAME, href: '/' },
+        { label: product.name, href: `/${product.id}` },
+        { label: service.name, href: `/${product.id}/${service.id}` },
+        { label: 'Incidents' },
+      ]} />
+    )}
+
+    <h1 style="font-family: var(--sans); font-size: 22px; font-weight: 600; color: var(--text); margin: 1em 0 0.5em;">{service.name} Incidents</h1>
+
+    {incidents.length > 0 ? (
+      <div>
+        {incidents.map((inc) => (
+          <IncidentHistoryItem incident={inc} />
+        ))}
+        <Pagination currentPage={currentPage} totalPages={totalPages} basePath={basePath} />
+      </div>
+    ) : (
+      <EmptyState message={`No incidents have been reported for ${service.name}.`} />
+    )}
+  </div>
+</Default>
