@@ -8,20 +8,6 @@ const PRODUCTS: Product[] = [
     launched: true,
     domain: 'status.sessions.gg',
   },
-  {
-    id: 'matches',
-    name: 'Matches',
-    tag: 'match servers',
-    launched: false,
-    domain: 'status.matches.gg',
-  },
-  {
-    id: 'rooms',
-    name: 'Rooms',
-    tag: 'persistent rooms',
-    launched: false,
-    domain: 'status.rooms.gg',
-  },
 ];
 
 export function getProducts(): Product[] {
