@@ -12,12 +12,17 @@ export const onRequest = defineMiddleware(async ({ request, locals, url, rewrite
 
   if (!scope) return next();
 
-  // Scoped host: passthrough special paths and static assets
+  // Passthrough special paths and static assets
   if (PASSTHROUGH.has(path) || path.startsWith('/_astro/') || path.startsWith('/api/')) {
     return next();
   }
 
-  // Rewrite all paths: / → /sessions, /incidents → /sessions/incidents, etc.
+  // Already rewritten — path starts with /scope, don't rewrite again
+  if (path.startsWith(`/${scope}`)) {
+    return next();
+  }
+
+  // Rewrite: / → /sessions, /incidents → /sessions/incidents, etc.
   const target = path === '/' ? `/${scope}` : `/${scope}${path}`;
   return rewrite(target);
 });
