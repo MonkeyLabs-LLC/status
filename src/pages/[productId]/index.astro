@@ -17,13 +17,13 @@ const { productId } = Astro.params;
 const product = productId ? getProduct(productId) : undefined;
 if (!product) return new Response('Not found', { status: 404 });
 
-const services = getServicesByProduct(product.id);
+const services = await getServicesByProduct(product.id);
 const overall = services.length > 0 ? worstStatus(services) : 'operational' as const;
 const bodyState = statusToState(overall);
 
-const activeIncidents = getActiveIncidents(product.id);
-const resolvedIncidents = getResolvedIncidents({ product: product.id, limit: 5 });
-const maintenances = getUpcomingMaintenances(product.id);
+const activeIncidents = await getActiveIncidents(product.id);
+const resolvedIncidents = await getResolvedIncidents({ product: product.id, limit: 5 });
+const maintenances = await getUpcomingMaintenances(product.id);
 
 const scope = (Astro.locals as any).scope as string | null;
 ---

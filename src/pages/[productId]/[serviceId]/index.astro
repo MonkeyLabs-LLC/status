@@ -12,7 +12,7 @@ import { COMPANY_NAME } from '../../../lib/brand';
 
 const { productId, serviceId } = Astro.params;
 const product = productId ? getProduct(productId) : undefined;
-const service = serviceId ? getService(serviceId) : undefined;
+const service = serviceId ? await getService(serviceId) : undefined;
 if (!product || !service || service.product !== product.id) {
   return new Response('Not found', { status: 404 });
 }
@@ -22,8 +22,8 @@ const bodyState = statusToState(service.status);
 const pillClass = statusPillClass(service.status);
 const label = statusLabel(service.status);
 
-const activeIncidents = getActiveIncidents(product.id, service.id);
-const resolvedIncidents = getResolvedIncidents({ product: product.id, service: service.id, limit: 10 });
+const activeIncidents = await getActiveIncidents(product.id, service.id);
+const resolvedIncidents = await getResolvedIncidents({ product: product.id, service: service.id, limit: 10 });
 
 const productHref = scope ? '/' : `/${product.id}`;
 const serviceIncidentsHref = scope ? `/${service.id}/incidents` : `/${product.id}/${service.id}/incidents`;

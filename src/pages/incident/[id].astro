@@ -6,7 +6,7 @@ import { getIncident } from '../../lib/incidents';
 import { getProduct } from '../../lib/products';
 
 const { id } = Astro.params;
-const incident = id ? getIncident(id) : undefined;
+const incident = id ? await getIncident(id) : undefined;
 
 if (!incident) {
   return new Response('Not found', { status: 404 });
