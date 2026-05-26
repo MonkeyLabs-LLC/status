@@ -27,8 +27,8 @@ const bodyState = incident.status === 'resolved'
 <Default title={incident.title} bodyState={bodyState}>
   <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
     <Breadcrumbs items={[
-      { label: 'Status', href: '/' },
-      ...(product && scope === null ? [{ label: product.name, href: `/${product.id}` }] : []),
+      ...(scope === null ? [{ label: 'MonkeyLabs', href: '/' }] : []),
+      ...(product ? [{ label: product.name, href: `/${product.id}` }] : []),
       { label: incident.title },
     ]} />
 

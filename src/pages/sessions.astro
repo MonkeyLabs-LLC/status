@@ -28,9 +28,13 @@ const showBreadcrumbs = scope === null; // Only show breadcrumbs on umbrella sco
 ---
 <Default title="Sessions Status" bodyState={bodyState}>
   <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
-    {showBreadcrumbs && (
+    {showBreadcrumbs ? (
       <Breadcrumbs items={[
-        { label: 'Status', href: '/' },
+        { label: 'MonkeyLabs', href: '/' },
+        { label: 'Sessions' },
+      ]} />
+    ) : (
+      <Breadcrumbs items={[
         { label: 'Sessions' },
       ]} />
     )}

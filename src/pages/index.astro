@@ -10,6 +10,7 @@
  * grid + active incidents across all products.
  */
 import Default from '../layouts/Default.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
 import StatusOverall from '../components/StatusOverall.astro';
 import IncidentCard from '../components/IncidentCard.astro';
 import { getProducts } from '../lib/products';
@@ -26,6 +27,10 @@ const activeIncidents = getActiveIncidents();
 ---
 <Default bodyState={bodyState}>
   <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
+    <Breadcrumbs items={[
+      { label: 'MonkeyLabs' },
+    ]} />
+
     <StatusOverall status={overallStatus} />
 
     {activeIncidents.length > 0 && (

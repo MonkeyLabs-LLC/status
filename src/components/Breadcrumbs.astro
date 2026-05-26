@@ -13,10 +13,10 @@ const { items } = Astro.props;
 <nav class="breadcrumbs" aria-label="Breadcrumb">
   {items.map((item, i) => (
     <>
-      {i > 0 && <span class="sep">/</span>}
+      {i > 0 && <span class="sep">›</span>}
       {item.href
         ? <a href={item.href}>{item.label}</a>
-        : <span>{item.label}</span>
+        : <span class="current">{item.label}</span>
       }
     </>
   ))}

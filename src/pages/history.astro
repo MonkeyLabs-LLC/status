@@ -20,7 +20,7 @@ const incidents = allIncidents.slice(offset, offset + PAGE_SIZE);
 <Default title="Incident History">
   <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
     <Breadcrumbs items={[
-      { label: 'Status', href: '/' },
+      ...(scope === null ? [{ label: 'MonkeyLabs', href: '/' }] : []),
       { label: 'Incident History' },
     ]} />
 
