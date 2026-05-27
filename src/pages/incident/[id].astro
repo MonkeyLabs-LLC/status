@@ -2,11 +2,18 @@
 import Default from '../../layouts/Default.astro';
 import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import IncidentCard from '../../components/IncidentCard.astro';
-import { getIncident } from '../../lib/incidents';
+import { getIncident } from '../../lib/db-incidents';
 import { getProduct } from '../../lib/products';
+import type { Incident } from '../../lib/types';
 
 const { id } = Astro.params;
-const incident = id ? await getIncident(id) : undefined;
+
+let incident: Incident | undefined;
+try {
+  incident = id ? await getIncident(id) : undefined;
+} catch (_e) {
+  // DB unreachable
+}
 
 if (!incident) {
   return new Response('Not found', { status: 404 });

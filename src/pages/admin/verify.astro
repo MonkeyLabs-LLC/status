@@ -1,0 +1,45 @@
+---
+import { consumeMagicLink, createSession, signCookie, COOKIE_NAME } from '@/lib/admin-auth';
+
+const token = Astro.url.searchParams.get('token');
+let error = '';
+
+if (token) {
+  const email = await consumeMagicLink(token);
+  if (email) {
+    const sessionId = await createSession(email);
+    const secret = process.env.ADMIN_SESSION_SECRET ?? '';
+    const signed = signCookie(sessionId, secret);
+    Astro.cookies.set(COOKIE_NAME, signed, {
+      path: '/',
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60,
+    });
+    return Astro.redirect('/admin');
+  } else {
+    error = 'This link has expired or has already been used. Request a new one.';
+  }
+} else {
+  error = 'No token provided.';
+}
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify — MonkeyLabs Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+</head>
+<body class="state-working" style="background:var(--bg);color:var(--text);">
+  <div class="page-flow" style="padding-top:120px;text-align:center;">
+    <h1 style="font-size:22px;font-weight:600;margin-bottom:0.6em;">Login failed</h1>
+    <p style="color:var(--dim);font-size:14px;margin-bottom:2em;">{error}</p>
+    <a href="/admin/login" class="btn btn-primary">Request a new link</a>
+  </div>
+</body>
+</html>

@@ -14,16 +14,24 @@ import Breadcrumbs from '../components/Breadcrumbs.astro';
 import StatusOverall from '../components/StatusOverall.astro';
 import IncidentCard from '../components/IncidentCard.astro';
 import { getProducts } from '../lib/products';
-import { getServices } from '../lib/services';
-import { getActiveIncidents } from '../lib/incidents';
+import { getPublicServices } from '../lib/db-services';
+import { getActiveIncidents } from '../lib/db-incidents';
 import { worstStatus, statusToState, statusLabel, statusPillClass } from '../lib/types';
-import type { Product } from '../lib/types';
+import type { Product, Service, Incident } from '../lib/types';
 
 const allProducts = getProducts();
-const allServices = await getServices();
+
+let allServices: Service[] = [];
+let activeIncidents: Incident[] = [];
+try {
+  allServices = await getPublicServices();
+  activeIncidents = await getActiveIncidents();
+} catch (_e) {
+  // DB unreachable — render with empty data
+}
+
 const overallStatus = worstStatus(allServices);
 const bodyState = statusToState(overallStatus);
-const activeIncidents = await getActiveIncidents();
 ---
 <Default bodyState={bodyState}>
   <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">

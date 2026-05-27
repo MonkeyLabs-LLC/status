@@ -1,0 +1,89 @@
+---
+import Admin from '@/layouts/Admin.astro';
+import { db } from '@/db';
+import { services } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/admin/services');
+
+let error = '';
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = form.get('_action')?.toString();
+
+  if (action === 'archive') {
+    await db.update(services).set({ archivedAt: new Date() }).where(eq(services.id, id));
+    return Astro.redirect('/admin/services');
+  }
+
+  if (action === 'update') {
+    const name = form.get('name')?.toString() ?? '';
+    const product = form.get('product')?.toString() ?? '';
+    const tag = form.get('tag')?.toString() || null;
+    const status = form.get('status')?.toString() ?? 'ok';
+    const sortOrder = parseInt(form.get('sort_order')?.toString() ?? '0');
+
+    if (!name || !product) {
+      error = 'Name and product are required.';
+    } else {
+      await db.update(services).set({ name, product, tag, status, sortOrder }).where(eq(services.id, id));
+      return Astro.redirect('/admin/services');
+    }
+  }
+}
+
+const rows = await db.select().from(services).where(eq(services.id, id));
+const svc = rows[0];
+if (!svc) return Astro.redirect('/admin/services');
+---
+<Admin title={`Edit ${svc.name}`}>
+  <div class="admin-header">
+    <h1>Edit service</h1>
+  </div>
+
+  {error && <div style="color:#e05151;font-family:var(--mono);font-size:13px;margin-bottom:1em;">{error}</div>}
+
+  <form method="POST" style="max-width:520px;">
+    <input type="hidden" name="_action" value="update">
+    <div class="form-group">
+      <label class="config-label">name</label>
+      <input type="text" name="name" class="config-input" value={svc.name} required>
+    </div>
+    <div class="form-group">
+      <label class="config-label">product</label>
+      <select name="product" class="config-input" required>
+        <option value="sessions" selected={svc.product === 'sessions'}>sessions</option>
+        <option value="core" selected={svc.product === 'core'}>core (platform)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="config-label">status</label>
+      <select name="status" class="config-input">
+        <option value="ok" selected={svc.status === 'ok'}>Operational</option>
+        <option value="deg" selected={svc.status === 'deg'}>Degraded</option>
+        <option value="out" selected={svc.status === 'out'}>Outage</option>
+        <option value="maint" selected={svc.status === 'maint'}>Maintenance</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="config-label">tag</label>
+      <input type="text" name="tag" class="config-input" value={svc.tag ?? ''}>
+    </div>
+    <div class="form-group">
+      <label class="config-label">sort order</label>
+      <input type="number" name="sort_order" class="config-input" value={svc.sortOrder}>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Save changes</button>
+      <a href="/admin/services" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+
+  <div style="margin-top:3em;padding-top:2em;border-top:1px solid var(--line);">
+    <form method="POST">
+      <input type="hidden" name="_action" value="archive">
+      <button type="submit" class="btn btn-danger" style="font-size:12px;">Archive this service</button>
+    </form>
+  </div>
+</Admin>

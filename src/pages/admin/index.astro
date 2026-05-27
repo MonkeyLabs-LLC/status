@@ -1,0 +1,39 @@
+---
+import Admin from '@/layouts/Admin.astro';
+import { db } from '@/db';
+import { services, incidents, subscribers } from '@/db/schema';
+import { ne, isNull, count } from 'drizzle-orm';
+
+const [svcCount] = await db.select({ value: count() }).from(services).where(isNull(services.archivedAt));
+const [incCount] = await db.select({ value: count() }).from(incidents).where(ne(incidents.status, 'resolved'));
+const [subCount] = await db.select({ value: count() }).from(subscribers);
+---
+<Admin title="Dashboard">
+  <div class="admin-header">
+    <h1>Dashboard</h1>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:3em;">
+    <div class="admin-stat-card">
+      <div class="admin-stat-value">{svcCount.value}</div>
+      <div class="admin-stat-label">services</div>
+    </div>
+    <div class="admin-stat-card">
+      <div class="admin-stat-value">{incCount.value}</div>
+      <div class="admin-stat-label">active incidents</div>
+    </div>
+    <div class="admin-stat-card">
+      <div class="admin-stat-value">{subCount.value}</div>
+      <div class="admin-stat-label">subscribers</div>
+    </div>
+  </div>
+
+  <div class="section-head-left">
+    <span class="eyebrow">quick actions</span>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:1em;">
+    <a href="/admin/services/new" class="btn btn-primary">Add service</a>
+    <a href="/admin/incidents/new" class="btn btn-primary">Declare incident</a>
+    <a href="/admin/maintenance/new" class="btn btn-secondary">Schedule maintenance</a>
+  </div>
+</Admin>

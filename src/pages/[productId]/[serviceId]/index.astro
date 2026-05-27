@@ -5,14 +5,28 @@ import UptimeBar from '../../../components/UptimeBar.astro';
 import IncidentCard from '../../../components/IncidentCard.astro';
 import EmptyState from '../../../components/EmptyState.astro';
 import { getProduct } from '../../../lib/products';
-import { getService } from '../../../lib/services';
-import { getActiveIncidents, getResolvedIncidents } from '../../../lib/incidents';
+import { getPublicService } from '../../../lib/db-services';
+import { getActiveIncidents, getResolvedIncidents } from '../../../lib/db-incidents';
 import { statusToState, statusLabel, statusPillClass } from '../../../lib/types';
 import { COMPANY_NAME } from '../../../lib/brand';
+import type { Service, Incident } from '../../../lib/types';
 
 const { productId, serviceId } = Astro.params;
 const product = productId ? getProduct(productId) : undefined;
-const service = serviceId ? await getService(serviceId) : undefined;
+
+let service: Service | undefined;
+let activeIncidents: Incident[] = [];
+let resolvedIncidents: Incident[] = [];
+try {
+  service = serviceId ? await getPublicService(serviceId) : undefined;
+  if (service) {
+    activeIncidents = await getActiveIncidents(product?.id, service.id);
+    resolvedIncidents = await getResolvedIncidents({ product: product?.id, service: service.id, limit: 10 });
+  }
+} catch (_e) {
+  // DB unreachable
+}
+
 if (!product || !service || service.product !== product.id) {
   return new Response('Not found', { status: 404 });
 }
@@ -21,9 +35,6 @@ const scope = (Astro.locals as any).scope as string | null;
 const bodyState = statusToState(service.status);
 const pillClass = statusPillClass(service.status);
 const label = statusLabel(service.status);
-
-const activeIncidents = await getActiveIncidents(product.id, service.id);
-const resolvedIncidents = await getResolvedIncidents({ product: product.id, service: service.id, limit: 10 });
 
 const productHref = scope ? '/' : `/${product.id}`;
 const serviceIncidentsHref = scope ? `/${service.id}/incidents` : `/${product.id}/${service.id}/incidents`;

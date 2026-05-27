@@ -1,11 +1,18 @@
 import type { APIRoute } from 'astro';
-import { getIncidents } from '../lib/incidents';
+import { getAllIncidents } from '../lib/db-incidents';
 import { SITE_TITLE, STATUS_DOMAIN } from '../lib/brand';
 import { incidentStatusLabel, severityLabel } from '../lib/types';
+import type { Incident } from '../lib/types';
 
 export const GET: APIRoute = async ({ locals }) => {
   const scope = (locals as any).scope as string | null;
-  const incidents = await getIncidents({ product: scope || undefined, limit: 20 });
+
+  let incidents: Incident[] = [];
+  try {
+    incidents = await getAllIncidents({ product: scope || undefined, limit: 20 });
+  } catch (_e) {
+    // DB unreachable — return empty feed
+  }
 
   const feedUrl = `https://${STATUS_DOMAIN}/feed.xml`;
   const siteUrl = `https://${STATUS_DOMAIN}`;

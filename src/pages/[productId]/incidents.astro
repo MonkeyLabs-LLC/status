@@ -5,8 +5,9 @@ import IncidentHistoryItem from '../../components/IncidentHistoryItem.astro';
 import Pagination from '../../components/Pagination.astro';
 import EmptyState from '../../components/EmptyState.astro';
 import { getProduct } from '../../lib/products';
-import { getIncidents } from '../../lib/incidents';
+import { getAllIncidents, countAllIncidents } from '../../lib/db-incidents';
 import { COMPANY_NAME } from '../../lib/brand';
+import type { Incident } from '../../lib/types';
 
 const { productId } = Astro.params;
 const product = productId ? getProduct(productId) : undefined;
@@ -17,11 +18,17 @@ const scope = (Astro.locals as any).scope as string | null;
 const PAGE_SIZE = 10;
 const pageParam = Astro.url.searchParams.get('page');
 const currentPage = Math.max(1, parseInt(pageParam || '1', 10) || 1);
-
-const allIncidents = await getIncidents({ product: product.id });
-const totalPages = Math.max(1, Math.ceil(allIncidents.length / PAGE_SIZE));
 const offset = (currentPage - 1) * PAGE_SIZE;
-const incidents = allIncidents.slice(offset, offset + PAGE_SIZE);
+
+let incidents: Incident[] = [];
+let totalPages = 1;
+try {
+  const total = await countAllIncidents({ product: product.id });
+  totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  incidents = await getAllIncidents({ product: product.id, limit: PAGE_SIZE, offset });
+} catch (_e) {
+  // DB unreachable — render with empty data
+}
 
 const productHref = scope ? '/' : `/${product.id}`;
 const basePath = scope ? '/incidents' : `/${product.id}/incidents`;

@@ -7,23 +7,32 @@ import IncidentCard from '../../components/IncidentCard.astro';
 import MaintenanceBanner from '../../components/MaintenanceBanner.astro';
 import EmptyState from '../../components/EmptyState.astro';
 import { getProduct } from '../../lib/products';
-import { getServicesByProduct } from '../../lib/services';
-import { getActiveIncidents, getResolvedIncidents } from '../../lib/incidents';
-import { getUpcomingMaintenances } from '../../lib/maintenance';
+import { getPublicServices } from '../../lib/db-services';
+import { getActiveIncidents, getResolvedIncidents } from '../../lib/db-incidents';
+import { getUpcomingMaintenance } from '../../lib/db-maintenance';
 import { worstStatus, statusToState } from '../../lib/types';
 import { COMPANY_NAME } from '../../lib/brand';
+import type { Service, Incident, Maintenance } from '../../lib/types';
 
 const { productId } = Astro.params;
 const product = productId ? getProduct(productId) : undefined;
 if (!product) return new Response('Not found', { status: 404 });
 
-const services = await getServicesByProduct(product.id);
+let services: Service[] = [];
+let activeIncidents: Incident[] = [];
+let resolvedIncidents: Incident[] = [];
+let maintenances: Maintenance[] = [];
+try {
+  services = await getPublicServices({ product: product.id });
+  activeIncidents = await getActiveIncidents(product.id);
+  resolvedIncidents = await getResolvedIncidents({ product: product.id, limit: 5 });
+  maintenances = await getUpcomingMaintenance(product.id);
+} catch (_e) {
+  // DB unreachable — render with empty data
+}
+
 const overall = services.length > 0 ? worstStatus(services) : 'operational' as const;
 const bodyState = statusToState(overall);
-
-const activeIncidents = await getActiveIncidents(product.id);
-const resolvedIncidents = await getResolvedIncidents({ product: product.id, limit: 5 });
-const maintenances = await getUpcomingMaintenances(product.id);
 
 const scope = (Astro.locals as any).scope as string | null;
 ---

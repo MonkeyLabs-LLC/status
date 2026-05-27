@@ -1,0 +1,53 @@
+---
+import Admin from '@/layouts/Admin.astro';
+import { db } from '@/db';
+import { incidents } from '@/db/schema';
+import { eq, ne, desc } from 'drizzle-orm';
+import EmptyState from '@/components/EmptyState.astro';
+
+const filter = Astro.url.searchParams.get('filter') ?? 'active';
+const condition = filter === 'resolved' ? eq(incidents.status, 'resolved') : ne(incidents.status, 'resolved');
+const rows = await db.select().from(incidents).where(condition).orderBy(desc(incidents.startedAt)).limit(50);
+
+function formatDate(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+---
+<Admin title="Incidents">
+  <div class="admin-header">
+    <h1>Incidents</h1>
+    <a href="/admin/incidents/new" class="btn btn-primary">Declare incident</a>
+  </div>
+
+  <div style="display:flex;gap:6px;margin-bottom:1.5em;">
+    <a href="/admin/incidents?filter=active" class:list={['btn', filter === 'active' ? 'btn-primary' : 'btn-secondary']} style="padding:6px 12px;font-size:12px;">Active</a>
+    <a href="/admin/incidents?filter=resolved" class:list={['btn', filter === 'resolved' ? 'btn-primary' : 'btn-secondary']} style="padding:6px 12px;font-size:12px;">Resolved</a>
+  </div>
+
+  {rows.length > 0 ? (
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Severity</th>
+          <th>Status</th>
+          <th>Started</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(inc => (
+          <tr>
+            <td style="font-weight:600;">{inc.title}</td>
+            <td><span class:list={['tag', inc.severity === 'major' ? 'tag-bad' : inc.severity === 'moderate' ? 'tag-warn' : '']}>{inc.severity.toUpperCase()}</span></td>
+            <td style="font-family:var(--mono);font-size:11px;text-transform:uppercase;">{inc.status}</td>
+            <td style="font-family:var(--mono);font-size:12px;color:var(--dim);">{formatDate(inc.startedAt)}</td>
+            <td><a href={`/admin/incidents/${inc.id}`} style="font-family:var(--mono);font-size:12px;">manage →</a></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : (
+    <EmptyState glyph="▲" title={filter === 'resolved' ? 'No resolved incidents' : 'No active incidents'} subtitle="Everything is running smoothly." />
+  )}
+</Admin>

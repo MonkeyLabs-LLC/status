@@ -1,0 +1,64 @@
+---
+import '@/styles/tokens.css';
+import '@/styles/base.css';
+import '@/styles/components.css';
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+const currentPath = Astro.url.pathname;
+
+const navItems = [
+  { href: '/admin', label: 'Dashboard', icon: '◆' },
+  { href: '/admin/services', label: 'Services', icon: '●' },
+  { href: '/admin/incidents', label: 'Incidents', icon: '▲' },
+  { href: '/admin/maintenance', label: 'Maintenance', icon: '◇' },
+  { href: '/admin/api-tokens', label: 'API Tokens', icon: '⚿' },
+];
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{title} — MonkeyLabs Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+</head>
+<body class="state-working">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand-block">
+        <a href="/admin" class="brand">monkeylabs</a>
+        <span class="badge">admin</span>
+      </div>
+      <nav class="topnav">
+        {navItems.map(item => (
+          <a
+            href={item.href}
+            class:list={['admin-nav-item', { active: currentPath === item.href || (item.href !== '/admin' && currentPath.startsWith(item.href)) }]}
+          >
+            <span style="font-family:var(--mono);font-size:10px;opacity:0.5;margin-right:0.4em;">{item.icon}</span>
+            {item.label}
+          </a>
+        ))}
+      </nav>
+      <div class="topnav-action">
+        <a href="/" class="topnav-cta" target="_blank">View status page</a>
+        <form method="POST" action="/api/admin/logout" style="display:inline;">
+          <button type="submit" class="btn btn-secondary" style="padding:5px 12px;font-size:12px;">Sign out</button>
+        </form>
+      </div>
+    </div>
+  </header>
+  <div class="page">
+    <slot />
+  </div>
+  <footer class="footer">
+    <div class="footer-sub">MonkeyLabs Status Admin</div>
+  </footer>
+</body>
+</html>

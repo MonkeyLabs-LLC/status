@@ -1,0 +1,44 @@
+---
+import Admin from '@/layouts/Admin.astro';
+import { db } from '@/db';
+import { maintenance } from '@/db/schema';
+import { asc } from 'drizzle-orm';
+import EmptyState from '@/components/EmptyState.astro';
+
+const rows = await db.select().from(maintenance).orderBy(asc(maintenance.scheduledStart));
+
+function formatTime(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+---
+<Admin title="Maintenance">
+  <div class="admin-header">
+    <h1>Scheduled maintenance</h1>
+    <a href="/admin/maintenance/new" class="btn btn-primary">Schedule maintenance</a>
+  </div>
+
+  {rows.length > 0 ? (
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Start</th>
+          <th>End</th>
+          <th>Affects</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(m => (
+          <tr>
+            <td style="font-weight:600;">{m.title}</td>
+            <td style="font-family:var(--mono);font-size:12px;color:var(--dim);">{formatTime(m.scheduledStart)}</td>
+            <td style="font-family:var(--mono);font-size:12px;color:var(--dim);">{formatTime(m.scheduledEnd)}</td>
+            <td>{m.affects.map(a => <span class="tag" style="margin-right:4px;">{a}</span>)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : (
+    <EmptyState glyph="◇" title="No scheduled maintenance" subtitle="Schedule maintenance windows to notify customers in advance." />
+  )}
+</Admin>

@@ -12,13 +12,15 @@ export const POST: APIRoute = async ({ request }) => {
     const body = await request.json();
     const email = body?.email;
 
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || typeof email !== 'string' || !emailRegex.test(email)) {
       return new Response(
         JSON.stringify({ ok: false, error: 'A valid email address is required.' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } },
       );
     }
 
+    // TODO: Add rate limiting when deployed behind a reverse proxy with IP tracking.
     // TODO: Wire to SUBSCRIBE_WEBHOOK_URL from env for real email delivery.
     // const webhookUrl = import.meta.env.SUBSCRIBE_WEBHOOK_URL;
     // if (webhookUrl) {

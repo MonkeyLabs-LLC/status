@@ -1,0 +1,52 @@
+---
+import Admin from '@/layouts/Admin.astro';
+import { getServices } from '@/lib/db-services';
+import { statusLabel } from '@/lib/status-compute';
+import EmptyState from '@/components/EmptyState.astro';
+
+const filter = Astro.url.searchParams.get('filter') ?? 'active';
+const services = await getServices({ archived: filter === 'archived' ? true : false });
+---
+<Admin title="Services">
+  <div class="admin-header">
+    <h1>Services</h1>
+    <a href="/admin/services/new" class="btn btn-primary">Add service</a>
+  </div>
+
+  <div style="display:flex;gap:6px;margin-bottom:1.5em;">
+    <a href="/admin/services?filter=active" class:list={['btn', filter === 'active' ? 'btn-primary' : 'btn-secondary']} style="padding:6px 12px;font-size:12px;">Active</a>
+    <a href="/admin/services?filter=archived" class:list={['btn', filter === 'archived' ? 'btn-primary' : 'btn-secondary']} style="padding:6px 12px;font-size:12px;">Archived</a>
+  </div>
+
+  {services.length > 0 ? (
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Product</th>
+          <th>Status</th>
+          <th>Tag</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {services.map(svc => (
+          <tr>
+            <td style="font-weight:600;">{svc.name}</td>
+            <td><span class="tag">{svc.product}</span></td>
+            <td>
+              <span class="tag-row">
+                <span class="status-dot" style="width:6px;height:6px;"></span>
+                <span style="font-family:var(--mono);font-size:11px;text-transform:uppercase;">{statusLabel(svc.status)}</span>
+              </span>
+            </td>
+            <td style="font-family:var(--mono);font-size:12px;color:var(--dim);">{svc.tag ?? '—'}</td>
+            <td><a href={`/admin/services/${svc.id}/edit`} style="font-family:var(--mono);font-size:12px;">edit →</a></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : (
+    <EmptyState glyph="●" title="No services" subtitle="Add your first service to start tracking status." />
+  )}
+</Admin>

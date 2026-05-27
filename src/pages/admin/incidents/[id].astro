@@ -1,0 +1,137 @@
+---
+import Admin from '@/layouts/Admin.astro';
+import { db } from '@/db';
+import { incidents, incidentTimeline } from '@/db/schema';
+import { eq, desc } from 'drizzle-orm';
+import { nanoid } from 'nanoid';
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/admin/incidents');
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = form.get('_action')?.toString();
+
+  if (action === 'add_update') {
+    const label = form.get('label')?.toString() ?? 'UPDATE';
+    const body = form.get('body')?.toString() ?? '';
+    if (body) {
+      await db.insert(incidentTimeline).values({
+        id: nanoid(),
+        incidentId: id,
+        at: new Date(),
+        label: label.toUpperCase(),
+        body,
+      });
+    }
+  }
+
+  if (action === 'change_status') {
+    const newStatus = form.get('status')?.toString() ?? '';
+    const updates: Record<string, any> = { status: newStatus };
+    if (newStatus === 'resolved') updates.resolvedAt = new Date();
+    await db.update(incidents).set(updates).where(eq(incidents.id, id));
+
+    // Auto-add timeline entry for status change
+    await db.insert(incidentTimeline).values({
+      id: nanoid(),
+      incidentId: id,
+      at: new Date(),
+      label: newStatus.toUpperCase(),
+      body: form.get('note')?.toString() || `Status changed to ${newStatus}.`,
+    });
+  }
+}
+
+const rows = await db.select().from(incidents).where(eq(incidents.id, id));
+const incident = rows[0];
+if (!incident) return Astro.redirect('/admin/incidents');
+
+const timeline = await db.select().from(incidentTimeline)
+  .where(eq(incidentTimeline.incidentId, id))
+  .orderBy(desc(incidentTimeline.at));
+
+const statusFlow = ['investigating', 'identified', 'monitoring', 'resolved'];
+const currentIdx = statusFlow.indexOf(incident.status);
+const nextStatuses = statusFlow.slice(currentIdx + 1);
+
+function formatTime(d: Date): string {
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+---
+<Admin title={incident.title}>
+  <div class="admin-header">
+    <div>
+      <h1>{incident.title}</h1>
+      <div style="display:flex;gap:6px;margin-top:0.4em;">
+        <span class:list={['tag', incident.severity === 'major' ? 'tag-bad' : incident.severity === 'moderate' ? 'tag-warn' : '']}>{incident.severity.toUpperCase()}</span>
+        <span class="tag">{incident.status.toUpperCase()}</span>
+        {incident.affects.map(a => <span class="tag">{a}</span>)}
+      </div>
+    </div>
+  </div>
+
+  <div style="font-family:var(--mono);font-size:12px;color:var(--faint);margin-bottom:2em;">
+    Started {formatTime(incident.startedAt)}
+    {incident.resolvedAt && <span> · Resolved {formatTime(incident.resolvedAt)}</span>}
+  </div>
+
+  <!-- Status progression -->
+  {incident.status !== 'resolved' && nextStatuses.length > 0 && (
+    <div style="margin-bottom:2em;padding:16px;border:1px solid var(--line);border-radius:6px;">
+      <div class="config-label" style="margin-bottom:0.8em;">advance status</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        {nextStatuses.map(s => (
+          <form method="POST" style="display:inline;">
+            <input type="hidden" name="_action" value="change_status">
+            <input type="hidden" name="status" value={s}>
+            <input type="hidden" name="note" value="">
+            <button type="submit" class:list={['btn', s === 'resolved' ? 'btn-primary' : 'btn-secondary']} style="font-size:12px;">
+              {s === 'resolved' ? 'Resolve' : s.charAt(0).toUpperCase() + s.slice(1)}
+            </button>
+          </form>
+        ))}
+      </div>
+    </div>
+  )}
+
+  <!-- Add timeline entry -->
+  {incident.status !== 'resolved' && (
+    <div style="margin-bottom:2em;">
+      <div class="config-label" style="margin-bottom:0.8em;">post update</div>
+      <form method="POST">
+        <input type="hidden" name="_action" value="add_update">
+        <div class="form-group">
+          <select name="label" class="config-input" style="max-width:200px;">
+            <option value="investigating">Investigating</option>
+            <option value="identified">Identified</option>
+            <option value="monitoring">Monitoring</option>
+            <option value="update">Update</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <textarea name="body" class="config-input" rows="2" placeholder="What changed, what you're doing next..." required style="resize:vertical;"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" style="font-size:12px;">Post update</button>
+      </form>
+    </div>
+  )}
+
+  <!-- Timeline -->
+  <div class="section-head-left" style="margin-top:2em;">
+    <span class="eyebrow">timeline</span>
+  </div>
+  {timeline.length > 0 ? (
+    <div class="incident-timeline" style="margin-top:1em;">
+      {timeline.map((entry, i) => (
+        <div class:list={['timeline-entry', { 'timeline-entry-latest': i === 0 }]}>
+          <div class="timeline-entry-label">{entry.label}</div>
+          <div class="timeline-entry-time">{formatTime(entry.at)}</div>
+          <div class="timeline-entry-body">{entry.body}</div>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <p style="color:var(--dim);font-size:14px;margin-top:1em;">No timeline entries yet.</p>
+  )}
+</Admin>
