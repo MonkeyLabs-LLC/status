@@ -45,7 +45,7 @@ const productHref = scope ? '/' : `/${product.id}`;
 const serviceHref = scope ? `/${service.id}` : `/${product.id}/${service.id}`;
 const basePath = scope ? `/${service.id}/incidents` : `/${product.id}/${service.id}/incidents`;
 ---
-<Default title={`${service.name} Incidents — ${product.name}`}>
+<Default title={`${service.name} Incidents — ${product.name}`} productId={product.id}>
   <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
     {scope ? (
       <Breadcrumbs items={[

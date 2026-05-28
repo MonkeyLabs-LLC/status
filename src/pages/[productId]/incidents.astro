@@ -33,7 +33,7 @@ try {
 const productHref = scope ? '/' : `/${product.id}`;
 const basePath = scope ? '/incidents' : `/${product.id}/incidents`;
 ---
-<Default title={`${product.name} Incidents`}>
+<Default title={`${product.name} Incidents`} productId={product.id}>
   <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
     {scope ? (
       <Breadcrumbs items={[

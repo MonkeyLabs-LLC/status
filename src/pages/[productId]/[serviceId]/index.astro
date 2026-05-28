@@ -39,7 +39,7 @@ const label = statusLabel(service.status);
 const productHref = scope ? '/' : `/${product.id}`;
 const serviceIncidentsHref = scope ? `/${service.id}/incidents` : `/${product.id}/${service.id}/incidents`;
 ---
-<Default title={`${service.name} — ${product.name}`} bodyState={bodyState}>
+<Default title={`${service.name} — ${product.name}`} bodyState={bodyState} productId={product.id}>
   <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
     {scope ? (
       <Breadcrumbs items={[

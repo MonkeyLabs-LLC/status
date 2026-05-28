@@ -11,15 +11,18 @@ interface Props {
   title?: string;
   description?: string;
   bodyState?: string;
+  productId?: string;
 }
 
 const {
   title = SITE_TITLE,
   description = SITE_DESCRIPTION,
   bodyState = 'working',
+  productId,
 } = Astro.props;
 
 const scope = (Astro.locals as any).scope as string | null;
+const effectiveScope = scope || productId || null;
 const fullTitle = title === SITE_TITLE ? title : `${title} — ${SITE_TITLE}`;
 ---
 <!DOCTYPE html>
@@ -38,7 +41,7 @@ const fullTitle = title === SITE_TITLE ? title : `${title} — ${SITE_TITLE}`;
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=JetBrains+Mono:wght@400;500;600&display=swap" />
 </head>
-<body class={`state-${bodyState}${scope ? ` scope-${scope}` : ''}`}>
+<body class={`state-${bodyState}${effectiveScope ? ` scope-${effectiveScope}` : ''}`}>
   <script is:inline>
     (function () {
       var SETS = [

@@ -36,7 +36,7 @@ const bodyState = statusToState(overall);
 
 const scope = (Astro.locals as any).scope as string | null;
 ---
-<Default title={`${product.name} Status`} bodyState={bodyState}>
+<Default title={`${product.name} Status`} bodyState={bodyState} productId={product.id}>
   <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
     {scope ? (
       <Breadcrumbs items={[{ label: product.name }]} />
