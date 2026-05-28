@@ -114,7 +114,7 @@
   background: var(--accent-bg);
   color: var(--accent);
   padding: 14px 18px 14px 22px;
-  border-radius: 6px;
+  border-radius: 3px;
   margin-bottom: 2em;
   font-family: var(--mono);
   font-size: 14px;
@@ -479,7 +479,7 @@ body.state-outage   .top-alert { display: block; }
   display: block;
   background: rgba(255, 255, 255, 0.015);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   padding: 18px 20px;
   text-decoration: none;
   color: var(--text);

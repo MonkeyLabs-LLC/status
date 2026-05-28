@@ -2,24 +2,26 @@
    Matches the Sessions design dialect exactly. */
 
 :root {
-  /* base palette — warm sandy */
-  --bg:           #1d1a17;
+  /* base palette — Sessions canonical */
+  --bg:           #1a1815;
   --text:         #f0e8d4;
-  --dim:          rgba(216, 205, 180, 0.65);
-  --faint:        rgba(216, 205, 180, 0.4);
-  --line:         rgba(216, 205, 180, 0.15);
-  --line-strong:  rgba(216, 205, 180, 0.28);
+  --body:         #d8cdb4;
+  --dim:          #aca28c;
+  --faint:        #847a67;
+  --ghost:        #524a3e;
+  --line:         #2e2924;
+  --line-strong:  #3d3630;
 
   /* state-aware accent — default = working */
-  --accent:       #87a3c0;
-  --accent-bg:    rgba(135, 163, 192, 0.10);
-  --accent-gl:    rgba(135, 163, 192, 0.20);
+  --accent:       #5b9eff;
+  --accent-bg:    rgba(91, 158, 255, 0.10);
+  --accent-gl:    rgba(91, 158, 255, 0.20);
 
-  /* status colors (non-state, for inline status pills) */
-  --status-ok:      #87a3c0;
-  --status-degraded:#d49a55;
-  --status-outage:  #c95e5e;
-  --status-maint:   #d4b75a;
+  /* status colors */
+  --status-ok:      #5b9eff;
+  --status-degraded:#ee9645;
+  --status-outage:  #ef6b6b;
+  --status-maint:   #f0c757;
 
   /* typography */
   --sans: 'DM Sans', system-ui, -apple-system, sans-serif;
@@ -27,7 +29,7 @@
 }
 
 /* State classes — set on <body>. Drive accent color globally. */
-body.state-working  { --accent: #87a3c0; --accent-bg: rgba(135,163,192,0.10); --accent-gl: rgba(135,163,192,0.20); }
-body.state-queued   { --accent: #d4b75a; --accent-bg: rgba(212,183, 90,0.12); --accent-gl: rgba(212,183, 90,0.22); }
-body.state-degraded { --accent: #d49a55; --accent-bg: rgba(212,154, 85,0.14); --accent-gl: rgba(212,154, 85,0.24); }
-body.state-outage   { --accent: #c95e5e; --accent-bg: rgba(201, 94, 94,0.14); --accent-gl: rgba(201, 94, 94,0.24); }
+body.state-working  { --accent: #5b9eff; --accent-bg: rgba(91,158,255,0.10); --accent-gl: rgba(91,158,255,0.20); }
+body.state-queued   { --accent: #f0c757; --accent-bg: rgba(240,199,87,0.12); --accent-gl: rgba(240,199,87,0.22); }
+body.state-degraded { --accent: #ee9645; --accent-bg: rgba(238,150,69,0.14); --accent-gl: rgba(238,150,69,0.24); }
+body.state-outage   { --accent: #ef6b6b; --accent-bg: rgba(239,107,107,0.14); --accent-gl: rgba(239,107,107,0.24); }
