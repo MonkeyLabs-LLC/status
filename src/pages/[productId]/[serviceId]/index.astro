@@ -9,15 +9,16 @@ import { getPublicService } from '../../../lib/db-services';
 import { getActiveIncidents, getResolvedIncidents } from '../../../lib/db-incidents';
 import { statusToState, statusLabel, statusPillClass } from '../../../lib/types';
 import { COMPANY_NAME } from '../../../lib/brand';
-import type { Service, Incident } from '../../../lib/types';
+import type { Product, Service, Incident } from '../../../lib/types';
 
 const { productId, serviceId } = Astro.params;
-const product = productId ? getProduct(productId) : undefined;
 
+let product: Product | undefined;
 let service: Service | undefined;
 let activeIncidents: Incident[] = [];
 let resolvedIncidents: Incident[] = [];
 try {
+  product = productId ? await getProduct(productId) : undefined;
   service = serviceId ? await getPublicService(serviceId) : undefined;
   if (service) {
     activeIncidents = await getActiveIncidents(product?.id, service.id);

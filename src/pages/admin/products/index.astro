@@ -1,0 +1,59 @@
+---
+import Admin from '@/layouts/Admin.astro';
+import { getAllProducts } from '@/lib/db-products';
+import EmptyState from '@/components/EmptyState.astro';
+
+const filter = Astro.url.searchParams.get('filter') ?? 'active';
+const products = await getAllProducts({ archived: filter === 'archived' ? true : false });
+---
+<Admin title="Products">
+  <div class="admin-header">
+    <h1>Products</h1>
+    <a href="/admin/products/new" class="btn btn-primary">Add product</a>
+  </div>
+
+  <div style="display:flex;gap:6px;margin-bottom:1.5em;">
+    <a href="/admin/products?filter=active" class:list={['btn', filter === 'active' ? 'btn-primary' : 'btn-secondary']} style="padding:6px 12px;font-size:12px;">Active</a>
+    <a href="/admin/products?filter=archived" class:list={['btn', filter === 'archived' ? 'btn-primary' : 'btn-secondary']} style="padding:6px 12px;font-size:12px;">Archived</a>
+  </div>
+
+  {products.length > 0 ? (
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>ID</th>
+          <th>Tag</th>
+          <th>Launched</th>
+          <th>Sort</th>
+          <th>Color</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {products.map(p => (
+          <tr>
+            <td style="font-weight:600;">{p.name}</td>
+            <td><span class="tag">{p.id}</span></td>
+            <td style="font-family:var(--mono);font-size:12px;color:var(--dim);">{p.tag ?? '—'}</td>
+            <td style="font-family:var(--mono);font-size:11px;text-transform:uppercase;">{p.launched ? 'yes' : 'no'}</td>
+            <td style="font-family:var(--mono);font-size:12px;color:var(--dim);">{p.sortOrder}</td>
+            <td>
+              {p.brandColor ? (
+                <span class="tag-row">
+                  <span style={`display:inline-block;width:12px;height:12px;border-radius:2px;background:${p.brandColor};border:1px solid var(--line);`}></span>
+                  <span style="font-family:var(--mono);font-size:11px;color:var(--dim);">{p.brandColor}</span>
+                </span>
+              ) : (
+                <span style="font-family:var(--mono);font-size:12px;color:var(--dim);">—</span>
+              )}
+            </td>
+            <td><a href={`/admin/products/${p.id}/edit`} style="font-family:var(--mono);font-size:12px;">edit →</a></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : (
+    <EmptyState glyph="◫" title="No products" subtitle="Add your first product to organize services and incidents." />
+  )}
+</Admin>

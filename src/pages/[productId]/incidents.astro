@@ -7,11 +7,9 @@ import EmptyState from '../../components/EmptyState.astro';
 import { getProduct } from '../../lib/products';
 import { getAllIncidents, countAllIncidents } from '../../lib/db-incidents';
 import { COMPANY_NAME } from '../../lib/brand';
-import type { Incident } from '../../lib/types';
+import type { Product, Incident } from '../../lib/types';
 
 const { productId } = Astro.params;
-const product = productId ? getProduct(productId) : undefined;
-if (!product) return new Response('Not found', { status: 404 });
 
 const scope = (Astro.locals as any).scope as string | null;
 
@@ -20,15 +18,20 @@ const pageParam = Astro.url.searchParams.get('page');
 const currentPage = Math.max(1, parseInt(pageParam || '1', 10) || 1);
 const offset = (currentPage - 1) * PAGE_SIZE;
 
+let product: Product | undefined;
 let incidents: Incident[] = [];
 let totalPages = 1;
 try {
-  const total = await countAllIncidents({ product: product.id });
-  totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  incidents = await getAllIncidents({ product: product.id, limit: PAGE_SIZE, offset });
+  product = productId ? await getProduct(productId) : undefined;
+  if (product) {
+    const total = await countAllIncidents({ product: product.id });
+    totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    incidents = await getAllIncidents({ product: product.id, limit: PAGE_SIZE, offset });
+  }
 } catch (_e) {
   // DB unreachable — render with empty data
 }
+if (!product) return new Response('Not found', { status: 404 });
 
 const productHref = scope ? '/' : `/${product.id}`;
 const basePath = scope ? '/incidents' : `/${product.id}/incidents`;

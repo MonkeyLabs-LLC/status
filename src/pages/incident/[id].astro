@@ -4,13 +4,17 @@ import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import IncidentCard from '../../components/IncidentCard.astro';
 import { getIncident } from '../../lib/db-incidents';
 import { getProduct } from '../../lib/products';
-import type { Incident } from '../../lib/types';
+import type { Incident, Product } from '../../lib/types';
 
 const { id } = Astro.params;
 
 let incident: Incident | undefined;
+let product: Product | undefined;
 try {
   incident = id ? await getIncident(id) : undefined;
+  if (incident) {
+    product = await getProduct(incident.product);
+  }
 } catch (_e) {
   // DB unreachable
 }
@@ -18,8 +22,6 @@ try {
 if (!incident) {
   return new Response('Not found', { status: 404 });
 }
-
-const product = getProduct(incident.product);
 const scope = (Astro.locals as any).scope as string | null;
 
 // Determine body state from incident severity

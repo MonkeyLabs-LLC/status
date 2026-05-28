@@ -8,6 +8,13 @@
       "when": 1779845976506,
       "tag": "0000_useful_radioactive_man",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779955302675,
+      "tag": "0001_solid_manta",
+      "breakpoints": true
     }
   ]
 }

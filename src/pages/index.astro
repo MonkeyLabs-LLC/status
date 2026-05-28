@@ -19,11 +19,11 @@ import { getActiveIncidents } from '../lib/db-incidents';
 import { worstStatus, statusToState, statusLabel, statusPillClass } from '../lib/types';
 import type { Product, Service, Incident } from '../lib/types';
 
-const allProducts = getProducts();
-
+let allProducts: Product[] = [];
 let allServices: Service[] = [];
 let activeIncidents: Incident[] = [];
 try {
+  allProducts = await getProducts();
   allServices = await getPublicServices();
   activeIncidents = await getActiveIncidents();
 } catch (_e) {
@@ -59,7 +59,7 @@ const bodyState = statusToState(overallStatus);
           const pillClass = statusPillClass(status);
           const label = statusLabel(status);
 
-          const brandColor = `var(--brand-${product.id})`;
+          const brandColor = product.brandColor || 'var(--accent)';
 
           return product.launched ? (
             <a href={`/${product.id}`} class="game-card brand-card" style={`--card-accent: ${brandColor}`}>

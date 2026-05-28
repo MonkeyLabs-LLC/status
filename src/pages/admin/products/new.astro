@@ -1,0 +1,78 @@
+---
+import Admin from '@/layouts/Admin.astro';
+import { createProduct, getProduct } from '@/lib/db-products';
+
+let error = '';
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const id = form.get('id')?.toString().trim() ?? '';
+  const name = form.get('name')?.toString().trim() ?? '';
+  const tag = form.get('tag')?.toString().trim() || null;
+  const launched = form.get('launched') === 'on';
+  const domain = form.get('domain')?.toString().trim() || null;
+  const brandColor = form.get('brand_color')?.toString().trim() || null;
+  const sortOrder = parseInt(form.get('sort_order')?.toString() ?? '0');
+
+  if (!id || !name) {
+    error = 'ID and name are required.';
+  } else if (!/^[a-z0-9-]+$/.test(id)) {
+    error = 'ID must be lowercase alphanumeric and dashes only (e.g. "sessions").';
+  } else if (await getProduct(id)) {
+    error = `A product with ID "${id}" already exists.`;
+  } else {
+    await createProduct({ id, name, tag, launched, domain, brandColor, sortOrder });
+    return Astro.redirect('/admin/products');
+  }
+}
+---
+<Admin title="Add Product">
+  <div class="admin-header">
+    <h1>Add product</h1>
+  </div>
+
+  {error && <div style="color:#e05151;font-family:var(--mono);font-size:13px;margin-bottom:1em;">{error}</div>}
+
+  <form method="POST" style="max-width:520px;">
+    <div class="form-group">
+      <label class="config-label">id</label>
+      <input type="text" name="id" class="config-input" placeholder="e.g. sessions" required pattern="[a-z0-9\-]+">
+      <div class="config-hint">URL-safe identifier. Lowercase, alphanumeric, dashes. Cannot be changed.</div>
+    </div>
+    <div class="form-group">
+      <label class="config-label">name</label>
+      <input type="text" name="name" class="config-input" placeholder="e.g. Sessions" required>
+      <div class="config-hint">Display name shown to customers.</div>
+    </div>
+    <div class="form-group">
+      <label class="config-label">tag</label>
+      <input type="text" name="tag" class="config-input" placeholder="e.g. game servers">
+      <div class="config-hint">Optional short descriptor shown under the name.</div>
+    </div>
+    <div class="form-group">
+      <label class="config-label">domain</label>
+      <input type="text" name="domain" class="config-input" placeholder="e.g. status.sessions.gg">
+      <div class="config-hint">Optional scoped hostname for this product.</div>
+    </div>
+    <div class="form-group">
+      <label class="config-label">brand color</label>
+      <input type="text" name="brand_color" class="config-input" placeholder="#5b9eff">
+      <div class="config-hint">Hex color used for the product card accent.</div>
+    </div>
+    <div class="form-group">
+      <label class="config-label">sort order</label>
+      <input type="number" name="sort_order" class="config-input" value="0">
+      <div class="config-hint">Lower numbers appear first.</div>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:0.5em;font-size:14px;cursor:pointer;">
+        <input type="checkbox" name="launched" checked>
+        <span>launched</span>
+      </label>
+      <div class="config-hint">Uncheck to show as "Coming soon" on the overview.</div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Create product</button>
+      <a href="/admin/products" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</Admin>

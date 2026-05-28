@@ -44,9 +44,10 @@ export interface Maintenance {
 export interface Product {
   id: string;
   name: string;
-  tag: string;
+  tag: string | null;
   launched: boolean;
-  domain: string;
+  domain: string | null;
+  brandColor: string | null;
 }
 
 export interface PaginatedQuery {

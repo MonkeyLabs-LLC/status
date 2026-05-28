@@ -1,4 +1,16 @@
-import { pgTable, text, integer, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, timestamp, jsonb, boolean, index } from 'drizzle-orm/pg-core';
+
+export const products = pgTable('products', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  tag: text('tag'),
+  launched: boolean('launched').notNull().default(true),
+  domain: text('domain'),
+  brandColor: text('brand_color'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+});
 
 export const services = pgTable('services', {
   id: text('id').primaryKey(),

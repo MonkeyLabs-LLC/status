@@ -8,13 +8,14 @@ import { getProduct } from '../../../lib/products';
 import { getPublicService } from '../../../lib/db-services';
 import { getAllIncidents, countAllIncidents } from '../../../lib/db-incidents';
 import { COMPANY_NAME } from '../../../lib/brand';
-import type { Service, Incident } from '../../../lib/types';
+import type { Product, Service, Incident } from '../../../lib/types';
 
 const { productId, serviceId } = Astro.params;
-const product = productId ? getProduct(productId) : undefined;
 
+let product: Product | undefined;
 let service: Service | undefined;
 try {
+  product = productId ? await getProduct(productId) : undefined;
   service = serviceId ? await getPublicService(serviceId) : undefined;
 } catch (_e) {
   // DB unreachable
