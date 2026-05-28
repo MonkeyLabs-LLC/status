@@ -710,6 +710,119 @@ body.state-outage .top-alert {
   padding: 2em 24px 4em;
 }
 
+/* Admin header */
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  margin-bottom: 1.5em;
+  padding-bottom: 1em;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.admin-header h1 {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+/* Data table */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.data-table thead {
+  background: rgba(255,255,255,.02);
+}
+.data-table th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.data-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--body);
+  vertical-align: middle;
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover { background: rgba(255,255,255,.015); }
+.data-table a { color: var(--accent); }
+
+/* Small tag chip (used in admin tables for IDs) */
+.tag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 2px 7px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--dim);
+}
+.tag-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Form */
+.form-group {
+  margin-bottom: 1.2em;
+}
+.config-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+  margin-bottom: 0.5em;
+}
+.config-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: var(--sans);
+  background: rgba(255,255,255,.02);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.12s;
+}
+.config-input:focus { border-color: var(--accent); }
+.config-input::placeholder { color: var(--faint); }
+textarea.config-input { resize: vertical; min-height: 80px; line-height: 1.5; font-family: var(--sans); }
+select.config-input { cursor: pointer; }
+.config-hint {
+  font-size: 12px;
+  color: var(--dim);
+  margin-top: 0.4em;
+  line-height: 1.5;
+}
+.form-actions {
+  display: flex;
+  gap: 0.6em;
+  margin-top: 2em;
+  padding-top: 1.5em;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
 .topnav {
   display: flex;
   align-items: center;
