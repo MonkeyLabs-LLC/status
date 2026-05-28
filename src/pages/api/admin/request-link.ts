@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createMagicLink } from '@/lib/admin-auth';
-import { sendMagicLinkEmail } from '@/lib/postmark';
+import { sendMagicLinkEmail } from '@/lib/email';
 
 export const POST: APIRoute = async ({ request, url }) => {
   try {

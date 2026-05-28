@@ -18,8 +18,7 @@
     "astro": "^5.7.0",
     "drizzle-orm": "^0.44.0",
     "nanoid": "^5.1.0",
-    "postgres": "^3.4.5",
-    "postmark": "^4.0.5"
+    "postgres": "^3.4.5"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
