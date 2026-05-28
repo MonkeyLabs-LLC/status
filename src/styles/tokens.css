@@ -1,4 +1,4 @@
-/* Tokens — palette, fonts, spacing, state + scope classes. */
+/* Tokens — palette, fonts, status + scope classes. */
 
 :root {
   /* base palette */
@@ -11,20 +11,23 @@
   --line:         #2e2924;
   --line-strong:  #3d3630;
 
-  /* brand accent — default blue (Sessions), overridden by scope */
-  --accent:       #5b9eff;
-  --accent-bg:    rgba(91, 158, 255, 0.10);
-  --accent-gl:    rgba(91, 158, 255, 0.20);
+  /* brand accent — default green (MonkeyLabs umbrella), overridden by scope */
+  --accent:       #22c55e;
+  --accent-bg:    rgba(34, 197, 94, 0.10);
+  --accent-gl:    rgba(34, 197, 94, 0.20);
 
-  /* status colors — operational is ALWAYS green, never brand */
-  --status-ok:      #22c55e;
-  --status-ok-bg:   rgba(34, 197, 94, 0.10);
-  --status-degraded:#ee9645;
-  --status-outage:  #ef6b6b;
-  --status-maint:   #f0c757;
+  /* status colors — fixed, never brand-driven */
+  --s-ok:         #22c55e;
+  --s-ok-bg:      rgba(34, 197, 94, 0.10);
+  --s-degraded:   #f0c757;
+  --s-degraded-bg:rgba(240, 199, 87, 0.12);
+  --s-outage:     #ef6b6b;
+  --s-outage-bg:  rgba(239, 107, 107, 0.10);
+  --s-maint:      #5b9eff;
+  --s-maint-bg:   rgba(91, 158, 255, 0.10);
 
-  /* per-product brand colors (for product cards on overview grid) */
-  --brand-sessions:   #5b9eff;
+  /* per-product brand colors */
+  --brand-sessions:    #5b9eff;
   --brand-monkeylabs:  #22c55e;
   --brand-bananalabs:  #e8b931;
 
@@ -33,13 +36,8 @@
   --mono: 'DM Mono', 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* State classes — status-driven, NOT brand-driven */
-body.state-working  { }
-body.state-queued   { --accent: #f0c757; --accent-bg: rgba(240,199,87,0.12); --accent-gl: rgba(240,199,87,0.22); }
-body.state-degraded { --accent: #ee9645; --accent-bg: rgba(238,150,69,0.14); --accent-gl: rgba(238,150,69,0.24); }
-body.state-outage   { --accent: #ef6b6b; --accent-bg: rgba(239,107,107,0.14); --accent-gl: rgba(239,107,107,0.24); }
-
-/* Scope classes — brand accent per hostname */
+/* Scope classes — brand accent per hostname/product */
 body.scope-sessions   { --accent: #5b9eff; --accent-bg: rgba(91,158,255,0.10); --accent-gl: rgba(91,158,255,0.20); }
 body.scope-bananalabs { --accent: #e8b931; --accent-bg: rgba(232,185,49,0.10); --accent-gl: rgba(232,185,49,0.20); }
+body.scope-monkeylabs,
 body:not([class*="scope-"]) { --accent: #22c55e; --accent-bg: rgba(34,197,94,0.10); --accent-gl: rgba(34,197,94,0.20); }

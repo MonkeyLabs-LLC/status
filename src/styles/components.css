@@ -107,12 +107,12 @@
 .breadcrumbs a:hover { color: var(--accent); }
 .breadcrumbs .sep { margin: 0 0.5em; color: var(--faint); }
 
-/* ---- Status banner (operational / queued state) ---- */
+/* ---- Status banner (operational state) ---- */
 .status-banner {
   position: relative;
-  border: 1px solid var(--accent);
-  background: var(--accent-bg);
-  color: var(--accent);
+  border: 1px solid var(--s-ok);
+  background: var(--s-ok-bg);
+  color: var(--s-ok);
   padding: 14px 18px 14px 22px;
   border-radius: 3px;
   margin-bottom: 2em;
@@ -122,52 +122,28 @@
 }
 .status-banner::before {
   content: var(--tl, '┌');
-  position: absolute;
-  top: 7px;
-  left: 9px;
-  color: var(--accent);
-  font-family: var(--mono);
-  font-size: 14px;
-  line-height: 1;
-  opacity: 0.65;
-  pointer-events: none;
+  position: absolute; top: 7px; left: 9px;
+  color: var(--s-ok); font-family: var(--mono); font-size: 14px;
+  line-height: 1; opacity: 0.55; pointer-events: none;
 }
 .status-banner::after {
   content: var(--br, '┘');
-  position: absolute;
-  bottom: 7px;
-  right: 9px;
-  color: var(--accent);
-  font-family: var(--mono);
-  font-size: 14px;
-  line-height: 1;
-  opacity: 0.65;
-  pointer-events: none;
+  position: absolute; bottom: 7px; right: 9px;
+  color: var(--s-ok); font-family: var(--mono); font-size: 14px;
+  line-height: 1; opacity: 0.55; pointer-events: none;
 }
 .status-banner .banner-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1em;
-  font-weight: 600;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1em; font-weight: 600;
 }
 .status-banner .banner-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5em;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: lowercase;
-  letter-spacing: 0.03em;
-  flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 0.5em;
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  text-transform: lowercase; letter-spacing: 0.03em; flex-shrink: 0;
 }
 .status-banner .banner-dot {
-  width: 7px;
-  height: 7px;
-  background: var(--accent);
-  border-radius: 50%;
-  flex-shrink: 0;
+  width: 7px; height: 7px; background: var(--s-ok);
+  border-radius: 50%; flex-shrink: 0;
   animation: statusPulse 2.4s ease-in-out infinite;
 }
 @keyframes statusPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
@@ -178,17 +154,23 @@ body.state-outage   .status-banner { display: none; }
 .top-alert {
   display: none;
   padding: 10px 20px;
-  background: var(--accent);
-  color: var(--bg);
   font-family: var(--mono);
   font-size: 13px;
   font-weight: 600;
   text-align: center;
   line-height: 1.4;
 }
-.top-alert a { color: var(--bg); text-decoration: underline; }
-body.state-degraded .top-alert,
-body.state-outage   .top-alert { display: block; }
+.top-alert a { text-decoration: underline; }
+body.state-degraded .top-alert {
+  display: block;
+  background: var(--s-degraded-bg); color: var(--s-degraded);
+  border-bottom: 1px solid var(--s-degraded);
+}
+body.state-outage .top-alert {
+  display: block;
+  background: var(--s-outage-bg); color: var(--s-outage);
+  border-bottom: 1px solid var(--s-outage);
+}
 
 /* ---- Status pill ---- */
 .status-pill {
@@ -199,7 +181,7 @@ body.state-outage   .top-alert { display: block; }
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.04em;
-  color: var(--status-ok);
+  color: var(--s-ok);
   white-space: nowrap;
 }
 .status-pill .dot {
@@ -209,9 +191,9 @@ body.state-outage   .top-alert { display: block; }
   background: currentColor;
   flex-shrink: 0;
 }
-.status-pill.warn { color: var(--status-degraded); }
-.status-pill.bad { color: var(--status-outage); }
-.status-pill.maint { color: var(--status-maint); }
+.status-pill.warn { color: var(--s-degraded); }
+.status-pill.bad { color: var(--s-outage); }
+.status-pill.maint { color: var(--s-maint); }
 
 /* ---- Service row ---- */
 .service-list {
@@ -484,11 +466,12 @@ body.state-outage   .top-alert { display: block; }
 
 /* ---- Brand card (game-card variant) ---- */
 .brand-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  display: flex;
   gap: 14px;
   margin: 1.5em 0;
 }
+.brand-grid > * { flex: 1; min-width: 0; }
+@media (max-width: 600px) { .brand-grid { flex-direction: column; } }
 .game-card {
   display: block;
   background: rgba(255, 255, 255, 0.015);
@@ -706,6 +689,62 @@ body.state-outage   .top-alert { display: block; }
   color: var(--accent);
 }
 .btn-primary:hover { background: var(--accent-bg); }
+
+/* ---- Admin ---- */
+.admin-nav-item {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dim);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 3px;
+  transition: color 0.12s, background 0.12s;
+}
+.admin-nav-item:hover { color: var(--text); background: rgba(255,255,255,.04); text-decoration: none; }
+.admin-nav-item.active { color: var(--accent); background: var(--accent-bg); }
+
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 2em 24px 4em;
+}
+
+.topnav {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+}
+
+.topnav-cta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 5px 12px;
+  border-radius: 3px;
+  text-decoration: none;
+  transition: background 0.12s;
+}
+.topnav-cta:hover { background: var(--accent-bg); text-decoration: none; }
+
+.btn-secondary {
+  border-color: var(--line);
+  color: var(--dim);
+  background: transparent;
+}
+.btn-secondary:hover { border-color: var(--dim); color: var(--text); }
+
+.footer {
+  border-top: 1px solid var(--line);
+  padding: 20px 24px;
+  text-align: center;
+}
+.footer-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+}
 
 /* ---- Corner brackets (responsive) ---- */
 @media (max-width: 720px) {
