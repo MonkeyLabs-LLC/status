@@ -147,8 +147,20 @@
 .status-banner .banner-head {
   display: flex;
   align-items: center;
-  gap: 0.7em;
+  justify-content: space-between;
+  gap: 1em;
   font-weight: 600;
+}
+.status-banner .banner-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
 }
 .status-banner .banner-dot {
   width: 7px;
@@ -156,7 +168,9 @@
   background: var(--accent);
   border-radius: 50%;
   flex-shrink: 0;
+  animation: statusPulse 2.4s ease-in-out infinite;
 }
+@keyframes statusPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 body.state-degraded .status-banner,
 body.state-outage   .status-banner { display: none; }
 

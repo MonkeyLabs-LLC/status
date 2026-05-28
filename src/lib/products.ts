@@ -8,6 +8,20 @@ const PRODUCTS: Product[] = [
     launched: true,
     domain: 'status.sessions.gg',
   },
+  {
+    id: 'monkeylabs',
+    name: 'MonkeyLabs',
+    tag: 'platform',
+    launched: true,
+    domain: 'status.monkeylabs.gg',
+  },
+  {
+    id: 'bananalabs',
+    name: 'BananaLabs',
+    tag: 'infrastructure',
+    launched: true,
+    domain: 'status.bananalabs.gg',
+  },
 ];
 
 export function getProducts(): Product[] {

@@ -18,8 +18,8 @@ const bannerMessage = isHealthy
 {isHealthy || status === 'maintenance' ? (
   <div class="status-banner">
     <div class="banner-head">
-      <span class="banner-dot"></span>
-      {bannerMessage}
+      <span>{bannerMessage}</span>
+      <span class="banner-pill"><span class="banner-dot"></span>{status}</span>
     </div>
   </div>
 ) : (
