@@ -3,6 +3,23 @@ import { COMPANY_NAME } from '../lib/brand';
 
 const scope = (Astro.locals as any).scope as string | null;
 
+// Detect product context from the URL path on the umbrella domain.
+// e.g. /sessions, /sessions/incidents, /bananalabs/foo → 'sessions' or 'bananalabs'
+const pathProduct = !scope
+  ? Astro.url.pathname.split('/').filter(Boolean)[0] ?? null
+  : null;
+const effectiveScope = scope || pathProduct;
+
+// History link target:
+// - Scoped hostname → /incidents (middleware rewrites to /{scope}/incidents)
+// - Umbrella but viewing a product → /{product}/incidents
+// - Umbrella root → /history (all-products view)
+const historyHref = scope
+  ? '/incidents'
+  : pathProduct
+    ? `/${pathProduct}/incidents`
+    : '/history';
+
 // Adapt brand display per scope
 let brandName = 'status.' + COMPANY_NAME.toLowerCase() + '.gg';
 let brandHref = '/';
@@ -37,7 +54,7 @@ if (scope === 'sessions') {
       </a>
     </div>
     <div class="topbar-links">
-      <a href="/history">History</a>
+      <a href={historyHref}>History</a>
       <a href="/feed.xml">Feed</a>
     </div>
   </div>
