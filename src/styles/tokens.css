@@ -1,8 +1,7 @@
-/* Tokens — palette, fonts, spacing, state classes.
-   Matches the Sessions design dialect exactly. */
+/* Tokens — palette, fonts, spacing, state + scope classes. */
 
 :root {
-  /* base palette — Sessions canonical */
+  /* base palette */
   --bg:           #1a1815;
   --text:         #f0e8d4;
   --body:         #d8cdb4;
@@ -12,29 +11,35 @@
   --line:         #2e2924;
   --line-strong:  #3d3630;
 
-  /* state-aware accent — default = working */
+  /* brand accent — default blue (Sessions), overridden by scope */
   --accent:       #5b9eff;
   --accent-bg:    rgba(91, 158, 255, 0.10);
   --accent-gl:    rgba(91, 158, 255, 0.20);
 
-  /* status colors */
-  --status-ok:      #5b9eff;
+  /* status colors — operational is ALWAYS green, never brand */
+  --status-ok:      #22c55e;
+  --status-ok-bg:   rgba(34, 197, 94, 0.10);
   --status-degraded:#ee9645;
   --status-outage:  #ef6b6b;
   --status-maint:   #f0c757;
+
+  /* per-product brand colors (for product cards on overview grid) */
+  --brand-sessions:   #5b9eff;
+  --brand-monkeylabs:  #22c55e;
+  --brand-bananalabs:  #e8b931;
 
   /* typography */
   --sans: 'DM Sans', system-ui, -apple-system, sans-serif;
   --mono: 'DM Mono', 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* State classes — set on <body>. Drive accent color globally. */
-body.state-working  { --accent: #5b9eff; --accent-bg: rgba(91,158,255,0.10); --accent-gl: rgba(91,158,255,0.20); }
+/* State classes — status-driven, NOT brand-driven */
+body.state-working  { }
 body.state-queued   { --accent: #f0c757; --accent-bg: rgba(240,199,87,0.12); --accent-gl: rgba(240,199,87,0.22); }
 body.state-degraded { --accent: #ee9645; --accent-bg: rgba(238,150,69,0.14); --accent-gl: rgba(238,150,69,0.24); }
 body.state-outage   { --accent: #ef6b6b; --accent-bg: rgba(239,107,107,0.14); --accent-gl: rgba(239,107,107,0.24); }
 
-/* Scope-based brand accents — override default per product */
-body.scope-sessions.state-working   { --accent: #5b9eff; --accent-bg: rgba(91,158,255,0.10); --status-ok: #5b9eff; }
-body.scope-bananalabs.state-working { --accent: #e8b931; --accent-bg: rgba(232,185,49,0.10); --status-ok: #e8b931; }
-body:not([class*="scope-"]).state-working { --accent: #22c55e; --accent-bg: rgba(34,197,94,0.10); --status-ok: #22c55e; }
+/* Scope classes — brand accent per hostname */
+body.scope-sessions   { --accent: #5b9eff; --accent-bg: rgba(91,158,255,0.10); --accent-gl: rgba(91,158,255,0.20); }
+body.scope-bananalabs { --accent: #e8b931; --accent-bg: rgba(232,185,49,0.10); --accent-gl: rgba(232,185,49,0.20); }
+body:not([class*="scope-"]) { --accent: #22c55e; --accent-bg: rgba(34,197,94,0.10); --accent-gl: rgba(34,197,94,0.20); }

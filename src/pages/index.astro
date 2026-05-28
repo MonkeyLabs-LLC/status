@@ -59,8 +59,10 @@ const bodyState = statusToState(overallStatus);
           const pillClass = statusPillClass(status);
           const label = statusLabel(status);
 
+          const brandColor = `var(--brand-${product.id})`;
+
           return product.launched ? (
-            <a href={`/${product.id}`} class="game-card brand-card">
+            <a href={`/${product.id}`} class="game-card brand-card" style={`--card-accent: ${brandColor}`}>
               <div class="game-card-top">
                 <div class="game-info">
                   <div class="game-name">{product.name}</div>
@@ -75,7 +77,7 @@ const bodyState = statusToState(overallStatus);
               </div>
             </a>
           ) : (
-            <div class="game-card brand-card soon">
+            <div class="game-card brand-card soon" style={`--card-accent: ${brandColor}`}>
               <div class="game-card-top">
                 <div class="game-info">
                   <div class="game-name">{product.name}</div>

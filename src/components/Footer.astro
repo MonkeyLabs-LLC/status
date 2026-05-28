@@ -8,10 +8,6 @@ const parentLabel = scope === 'sessions' ? 'sessions.gg' : PARENT_DOMAIN;
 <footer class="site-footer">
   <div class="footer-inner">
     <span class="copy">&copy; {year} {LEGAL_NAME}</span>
-    <div class="footer-links">
-      <a href={`${parentUrl}/terms`}>terms</a>
-      <a href={`${parentUrl}/privacy`}>privacy</a>
-      <a href={parentUrl}>{parentLabel}</a>
-    </div>
+    <a href={parentUrl}>{parentLabel}</a>
   </div>
 </footer>
