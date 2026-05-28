@@ -33,3 +33,7 @@ body.state-working  { --accent: #5b9eff; --accent-bg: rgba(91,158,255,0.10); --a
 body.state-queued   { --accent: #f0c757; --accent-bg: rgba(240,199,87,0.12); --accent-gl: rgba(240,199,87,0.22); }
 body.state-degraded { --accent: #ee9645; --accent-bg: rgba(238,150,69,0.14); --accent-gl: rgba(238,150,69,0.24); }
 body.state-outage   { --accent: #ef6b6b; --accent-bg: rgba(239,107,107,0.14); --accent-gl: rgba(239,107,107,0.24); }
+
+/* Scope-based brand accents — override default blue per product */
+body.scope-sessions.state-working { --accent: #5b9eff; --accent-bg: rgba(91,158,255,0.10); --status-ok: #5b9eff; }
+body:not(.scope-sessions):not([class*="scope-"]).state-working { --accent: #22c55e; --accent-bg: rgba(34,197,94,0.10); --status-ok: #22c55e; }

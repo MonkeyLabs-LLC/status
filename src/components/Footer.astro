@@ -1,14 +1,17 @@
 ---
-import { LEGAL_NAME } from '../lib/brand';
+import { LEGAL_NAME, PARENT_DOMAIN } from '../lib/brand';
 const year = new Date().getFullYear();
+const scope = (Astro.locals as any).scope as string | null;
+const parentUrl = scope === 'sessions' ? 'https://sessions.gg' : `https://${PARENT_DOMAIN}`;
+const parentLabel = scope === 'sessions' ? 'sessions.gg' : PARENT_DOMAIN;
 ---
 <footer class="site-footer">
   <div class="footer-inner">
+    <span class="copy">&copy; {year} {LEGAL_NAME}</span>
     <div class="footer-links">
-      <a href="https://sessions.gg/terms">Terms</a>
-      <a href="https://sessions.gg/privacy">Privacy</a>
-      <a href="https://sessions.gg">Sessions.gg</a>
+      <a href={`${parentUrl}/terms`}>terms</a>
+      <a href={`${parentUrl}/privacy`}>privacy</a>
+      <a href={parentUrl}>{parentLabel}</a>
     </div>
-    <p class="copy">&copy; {year} {LEGAL_NAME}</p>
   </div>
 </footer>
