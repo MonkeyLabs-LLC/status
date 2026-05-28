@@ -3,10 +3,16 @@ import Admin from '@/layouts/Admin.astro';
 import { db } from '@/db';
 import { incidents, incidentTimeline } from '@/db/schema';
 import { getServices } from '@/lib/db-services';
+import { getLaunchedProducts } from '@/lib/db-products';
 import { nanoid } from 'nanoid';
 
 const allServices = await getServices({ archived: false });
-const products = [...new Set(allServices.map(s => s.product))];
+const productList = await getLaunchedProducts();
+// Group services by product for the affects picker
+const servicesByProduct: Record<string, typeof allServices> = {};
+for (const svc of allServices) {
+  (servicesByProduct[svc.product] ||= []).push(svc);
+}
 
 let error = '';
 if (Astro.request.method === 'POST') {
@@ -18,7 +24,7 @@ if (Astro.request.method === 'POST') {
   const initialNote = form.get('initial_note')?.toString() ?? '';
 
   if (!title || !summary || affects.length === 0) {
-    error = 'Title, summary, and at least one affected product are required.';
+    error = 'Title, summary, and at least one affected service are required.';
   } else {
     const id = nanoid();
     await db.insert(incidents).values({
@@ -65,14 +71,25 @@ if (Astro.request.method === 'POST') {
       </select>
     </div>
     <div class="form-group">
-      <label class="config-label">affected products</label>
-      {products.map(p => (
-        <label style="display:flex;align-items:center;gap:0.5em;margin-top:0.4em;font-size:14px;cursor:pointer;">
-          <input type="checkbox" name="affects" value={p}>
-          {p}
-        </label>
-      ))}
-      {products.length === 0 && <div class="config-hint">No services configured yet. Add services first.</div>}
+      <label class="config-label">affected services</label>
+      <div class="config-hint" style="margin-bottom:0.6em;">Check every service that this incident affects. Incidents show up on a product's history when at least one of its services is affected.</div>
+      {productList.map(prod => {
+        const svcs = servicesByProduct[prod.id] || [];
+        if (svcs.length === 0) return null;
+        return (
+          <div style="margin-top:1em;">
+            <div style="font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--faint);margin-bottom:0.4em;">{prod.name}</div>
+            {svcs.map(s => (
+              <label style="display:flex;align-items:center;gap:0.5em;margin-top:0.3em;font-size:14px;cursor:pointer;">
+                <input type="checkbox" name="affects" value={s.id}>
+                <span>{s.name}</span>
+                {s.tag && <span style="font-family:var(--mono);font-size:11px;color:var(--dim);">— {s.tag}</span>}
+              </label>
+            ))}
+          </div>
+        );
+      })}
+      {allServices.length === 0 && <div class="config-hint">No services configured yet. Add services first.</div>}
     </div>
     <div class="form-group">
       <label class="config-label">initial update</label>
