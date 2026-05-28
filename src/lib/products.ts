@@ -9,13 +9,6 @@ const PRODUCTS: Product[] = [
     domain: 'status.sessions.gg',
   },
   {
-    id: 'monkeylabs',
-    name: 'MonkeyLabs',
-    tag: 'platform',
-    launched: true,
-    domain: 'status.monkeylabs.gg',
-  },
-  {
     id: 'bananalabs',
     name: 'BananaLabs',
     tag: 'infrastructure',

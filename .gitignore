@@ -16,6 +16,7 @@ bun-debug.log*
 # Environment
 .env
 .env.*
+netlify-env.txt
 
 # Editor
 .vscode/

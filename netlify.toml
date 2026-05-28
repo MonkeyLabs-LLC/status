@@ -4,6 +4,10 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  # RESEND_FROM_NAME and RESEND_FROM_EMAIL are sender identifiers, not secrets.
+  # Netlify's secrets scanner false-positives because they're set as env vars
+  # but appear in code as fallback defaults.
+  SECRETS_SCAN_OMIT_KEYS = "RESEND_FROM_NAME,RESEND_FROM_EMAIL"
 
 [[headers]]
   for = "/_astro/*"
