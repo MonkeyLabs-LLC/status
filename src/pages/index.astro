@@ -60,9 +60,10 @@ const bodyState = statusToState(overallStatus);
           const label = statusLabel(status);
 
           const brandColor = product.brandColor || 'var(--accent)';
+          const cardHref = product.domain ? `https://${product.domain}` : `/${product.id}`;
 
           return product.launched ? (
-            <a href={`/${product.id}`} class="game-card brand-card" style={`--card-accent: ${brandColor}`}>
+            <a href={cardHref} class="game-card brand-card" style={`--card-accent: ${brandColor}`}>
               <div class="game-card-top">
                 <div class="game-info">
                   <div class="game-name">{product.name}</div>
