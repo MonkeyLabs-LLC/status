@@ -2,7 +2,10 @@
 import Admin from '@/layouts/Admin.astro';
 import { db } from '@/db';
 import { services } from '@/db/schema';
+import { getLaunchedProducts } from '@/lib/db-products';
 import { nanoid } from 'nanoid';
+
+const productList = await getLaunchedProducts();
 
 let error = '';
 if (Astro.request.method === 'POST') {
@@ -42,8 +45,10 @@ if (Astro.request.method === 'POST') {
     <div class="form-group">
       <label class="config-label">product</label>
       <select name="product" class="config-input" required>
-        <option value="sessions">sessions</option>
-        <option value="core">core (platform)</option>
+        {productList.length === 0 && <option value="" disabled>No products — add one first</option>}
+        {productList.map(p => (
+          <option value={p.id}>{p.name}</option>
+        ))}
       </select>
       <div class="config-hint">Which product does this service belong to?</div>
     </div>
