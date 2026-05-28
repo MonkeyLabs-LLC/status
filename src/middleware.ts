@@ -2,7 +2,7 @@ import { defineMiddleware } from 'astro:middleware';
 import { resolveScope } from './lib/scope';
 import { verifyCookie, COOKIE_NAME } from './lib/admin-auth';
 
-const PASSTHROUGH = new Set(['/feed.xml', '/api/status.json', '/api/subscribe']);
+const PASSTHROUGH = new Set(['/feed.xml', '/api/status.json', '/api/subscribe', '/history']);
 
 export const onRequest = defineMiddleware(async ({ request, locals, url, cookies, redirect, rewrite }, next) => {
   const host = request.headers.get('host') || 'localhost';

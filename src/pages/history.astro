@@ -1,0 +1,53 @@
+---
+/**
+ * Umbrella incident history.
+ * Shows ALL incidents across ALL products.
+ * Scoped hosts have / rewritten to /scope by middleware, but /history is passed through —
+ * so on a scoped host, /history shows all-products incidents (same view as the umbrella).
+ * If you want product-scoped history, use /{product}/incidents.
+ */
+import Default from '../layouts/Default.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import IncidentHistoryItem from '../components/IncidentHistoryItem.astro';
+import Pagination from '../components/Pagination.astro';
+import EmptyState from '../components/EmptyState.astro';
+import { getAllIncidents, countAllIncidents } from '../lib/db-incidents';
+import { COMPANY_NAME } from '../lib/brand';
+import type { Incident } from '../lib/types';
+
+const PAGE_SIZE = 10;
+const pageParam = Astro.url.searchParams.get('page');
+const currentPage = Math.max(1, parseInt(pageParam || '1', 10) || 1);
+const offset = (currentPage - 1) * PAGE_SIZE;
+
+let incidents: Incident[] = [];
+let totalPages = 1;
+try {
+  const total = await countAllIncidents();
+  totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  incidents = await getAllIncidents({ limit: PAGE_SIZE, offset });
+} catch (_e) {
+  // DB unreachable
+}
+---
+<Default title="Incident History">
+  <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
+    <Breadcrumbs items={[
+      { label: COMPANY_NAME, href: '/' },
+      { label: 'History' },
+    ]} />
+
+    <h1 style="font-family: var(--sans); font-size: 22px; font-weight: 600; color: var(--text); margin: 1em 0 0.5em;">Incident History</h1>
+
+    {incidents.length > 0 ? (
+      <div>
+        {incidents.map((inc) => (
+          <IncidentHistoryItem incident={inc} />
+        ))}
+        <Pagination currentPage={currentPage} totalPages={totalPages} basePath="/history" />
+      </div>
+    ) : (
+      <EmptyState message="No incidents have been reported." />
+    )}
+  </div>
+</Default>
