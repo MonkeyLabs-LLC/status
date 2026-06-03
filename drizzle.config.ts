@@ -9,6 +9,6 @@ export default defineConfig({
   dialect: 'postgresql',
   dbCredentials: {
     url,
-    ssl: isLocalhost ? false : true,
+    ssl: isLocalhost ? false : 'require',
   },
 });
