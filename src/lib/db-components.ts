@@ -6,7 +6,7 @@
 import { db } from '@/db';
 import { components } from '@/db/schema';
 import { eq, isNull, isNotNull, asc, and, inArray } from 'drizzle-orm';
-import { descendantIds, firstLiveComponent } from './components';
+import { descendantIds, descendantIdsIncludingArchived, firstLiveComponent } from './components';
 
 /**
  * Thrown by setComponentArchived when an archive would hide a live outage
@@ -67,11 +67,16 @@ export async function updateComponentRow(id: string, patch: Record<string, unkno
  * (C1/C2): if any node in the subtree has an open incident or live (declared)
  * observations, we refuse with ArchiveBlockedError rather than silently paint a
  * live outage green by dropping the node(s) out of the rendered tree. Restore
- * only un-archives the single node (its descendants are restored explicitly).
+ * CASCADES symmetrically: un-archiving a parent un-archives its whole archived
+ * subtree, so a node restored after a cascade-archive can never re-appear with
+ * its children left invisible (the C2 hidden-services class via the restore
+ * path). We walk descendants over ALL rows (descendantIdsIncludingArchived)
+ * because descendantIds() filters out archived rows and would not find them.
  */
 export async function setComponentArchived(id: string, archived: boolean) {
   if (!archived) {
-    await db.update(components).set({ archivedAt: null }).where(eq(components.id, id));
+    const ids = await descendantIdsIncludingArchived(id);
+    await db.update(components).set({ archivedAt: null }).where(inArray(components.id, ids));
     return;
   }
   const ids = await descendantIds(id);

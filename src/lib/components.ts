@@ -276,6 +276,36 @@ export async function descendantIds(id: string): Promise<string[]> {
 }
 
 /**
+ * Ids of a component and its whole descendant subtree, reading ALL rows
+ * regardless of archived_at. Used by the RESTORE path: a cascade-archive sets
+ * archived_at on the whole branch, so descendantIds() (which filters to live
+ * rows) can no longer see the archived children to un-archive them. Walking the
+ * adjacency over every row lets restore reverse the cascade symmetrically.
+ * Cycle-guarded.
+ */
+export async function descendantIdsIncludingArchived(id: string): Promise<string[]> {
+  const rows = await db.select({ id: components.id, parentId: components.parentId })
+    .from(components);
+  const kids = new Map<string, string[]>();
+  for (const r of rows) {
+    if (!r.parentId) continue;
+    const arr = kids.get(r.parentId) ?? [];
+    arr.push(r.id);
+    kids.set(r.parentId, arr);
+  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const walk = (cur: string) => {
+    if (seen.has(cur)) return; // cycle guard
+    seen.add(cur);
+    out.push(cur);
+    for (const k of kids.get(cur) ?? []) walk(k);
+  };
+  walk(id);
+  return out;
+}
+
+/**
  * Archive-safety guard (C1/C2). Returns the id of the first component in the
  * given set that has a LIVE outage — an open (non-resolved) incident referencing
  * it, OR live observations the quorum engine has DECLARED on it — or null if the

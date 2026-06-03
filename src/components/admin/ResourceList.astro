@@ -30,21 +30,31 @@ function fieldLabel(name: string): string {
   return resource.fields.find((f) => f.name === name)?.label ?? name;
 }
 
+/** HTML-escape a free-text value before it is emitted via set:html. */
+function esc(s: unknown): string {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function cellHtml(row: Record<string, any>, col: string, first: boolean): string {
   const key = `${row[idKey]}|${col}`;
   if (cellOverrides[key]) return cellOverrides[key];
   let val = row[col];
   if (val == null || val === '') return `<span class="muted">—</span>`;
   if (col === 'brandColor') {
-    return `<span class="muted" style="display:inline-flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:3px;background:${val};border:1px solid var(--line2)"></span>${val}</span>`;
+    return `<span class="muted" style="display:inline-flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:3px;background:${esc(val)};border:1px solid var(--line2)"></span>${esc(val)}</span>`;
   }
   if (PILL_FIELDS.has(col)) {
     if (col === 'launched') return pillHtml(val ? 'operational' : 'stale', val ? 'launched' : 'draft');
     return pillHtml(String(val));
   }
-  if (DATE_FIELDS.has(col)) return `<span class="muted">${fmtDate(val)}</span>`;
-  if (first) return `<span class="t">${val}</span>`;
-  return `<span class="muted">${val}</span>`;
+  if (DATE_FIELDS.has(col)) return `<span class="muted">${esc(fmtDate(val))}</span>`;
+  if (first) return `<span class="t">${esc(val)}</span>`;
+  return `<span class="muted">${esc(val)}</span>`;
 }
 ---
 <div class="tbl">

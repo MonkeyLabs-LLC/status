@@ -14,12 +14,21 @@
  * A source past its TTL (observation.expires_at, or default_ttl from now)
  * is STALE: it drops out of quorum and flags reduced coverage (dead-man).
  *
+ * A LIVE `manual` observation is AUTHORITATIVE for its component and out-votes
+ * the monitor quorum above: a human 'ok' (Resolve / "all clear") forces
+ * OPERATIONAL and SUPPRESSES auto-redeclaration even while ≥2 monitors still
+ * report down (so a Resolve is not undone + re-spammed every sweep); a human
+ * non-ok DECLARES on its own. The manual 'ok' carries a grace TTL so the
+ * suppression expires and the engine falls back to monitor quorum — a stale
+ * resolve can never permanently mask a genuine future outage. Only when NO live
+ * manual read exists does the ≥2-monitor quorum decide.
+ *
  * Incident *existence* is engine-owned. Incident *status*
  * (investigating->identified->monitoring->resolved) stays human-editable —
  * the engine only opens (status=investigating), updates level, and
  * force-resolves auto incidents; it never touches a human-owned incident's
- * status text. A manual override is just a high-weight `manual` source
- * observation flowing through this same engine.
+ * status text. A manual override is a high-weight `manual` source observation
+ * flowing through this same engine.
  *
  * Reuses: the existing `incidents` / `incident_timeline` / `components` tables
  * (a component id IS a components.id leaf), nanoid ids, and the incident
@@ -33,6 +42,19 @@ import { nanoid } from 'nanoid';
 export type Signal = 'ok' | 'degraded' | 'down';
 export type QuorumState = 'ok' | 'watch' | 'declared';
 export type Level = 'degraded' | 'major';
+
+/**
+ * Grace window (seconds) attached to a manual `ok` ("all clear") override.
+ *
+ * A live manual `ok` is AUTHORITATIVE: it suppresses auto-redeclaration even
+ * while monitors still report `down` (see evaluateComponent). To stop a stale
+ * resolve from permanently masking a genuine FUTURE outage, that suppression
+ * must expire — after this window the manual `ok` becomes stale, drops out, and
+ * the engine falls back to monitor quorum. A manual NON-ok (an active human
+ * declare) is deliberately NOT given a TTL: the banner must persist until a
+ * human resolves it.
+ */
+export const MANUAL_OK_GRACE_SECONDS = 3600;
 
 /** One source's current read on a component. */
 export interface SourceRead {
@@ -90,7 +112,10 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
   let staleCount = 0;
   let nonOkCount = 0;
   let liveCount = 0;
-  let hasManualNonOk = false;
+  // The latest LIVE (non-expired) manual read, if any. `rows` is ordered newest
+  // observation first per source, and the manual source emits at most one live
+  // read, so the first live manual row we see is the current human verdict.
+  let liveManual: SourceRead | null = null;
 
   for (const r of rows) {
     if (r.revoked_at) continue; // revoked source: ignore entirely
@@ -109,9 +134,11 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
       staleCount++;
     } else {
       liveCount++;
+      if (r.kind === 'manual' && (!liveManual || read.observedAt > liveManual.observedAt)) {
+        liveManual = read;
+      }
       if (read.signal !== 'ok') {
         nonOkCount++;
-        if (r.kind === 'manual') hasManualNonOk = true;
       }
     }
   }
@@ -120,12 +147,35 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
   const downAgrees = liveReads.some((r) => r.signal === 'down');
   let state: QuorumState;
   let level: Level | null = null;
-  // Quorum: ≥2 independent sources agree non-ok → DECLARE; OR a `manual` override
-  // (a human declare) on its own. Exactly one AUTOMATED source → WATCH (logged,
-  // surfaced internally, never pages). The single-source bypass is gated on
-  // kind='manual', NOT weight — so one mis-weighted monitor can never page an
-  // outage without corroboration.
-  if (nonOkCount >= 2 || hasManualNonOk) {
+  // Decision precedence:
+  //
+  //   1. A LIVE manual read is AUTHORITATIVE for its component (a human's verdict
+  //      out-votes the monitors):
+  //        - manual 'ok'  -> OPERATIONAL. Suppress auto-(re)declaration even while
+  //          ≥2 monitors still report 'down', so an admin's "all clear" / Resolve
+  //          is not undone (and re-spammed) on the very next sweep. This `ok` is
+  //          given a grace TTL at write time (MANUAL_OK_GRACE_SECONDS), so once it
+  //          expires it becomes stale, drops out here, and we fall through to the
+  //          monitor quorum below — a stale resolve can never permanently mask a
+  //          genuine future outage. An EXPIRED manual 'ok' is, by virtue of `stale`,
+  //          simply absent here.
+  //        - manual non-ok -> DECLARE at that level. This is the existing
+  //          single-source manual bypass (a human declare pages on its own and
+  //          never auto-expires).
+  //   2. No live manual read -> fall back to monitor quorum: ≥2 independent live
+  //      sources agree non-ok → DECLARE; exactly one → WATCH (surfaced, never
+  //      pages); zero → OPERATIONAL.
+  //
+  // The single-source bypass is gated on kind='manual', NOT weight — so one
+  // mis-weighted monitor can never page an outage without corroboration.
+  if (liveManual) {
+    if (liveManual.signal === 'ok') {
+      state = 'ok';
+    } else {
+      state = 'declared';
+      level = liveManual.signal === 'down' ? 'major' : 'degraded';
+    }
+  } else if (nonOkCount >= 2) {
     state = 'declared';
     level = downAgrees ? 'major' : 'degraded';
   } else if (nonOkCount >= 1) {
@@ -378,11 +428,21 @@ export async function recordManualOverride(opts: {
 }): Promise<void> {
   const now = opts.now ?? new Date();
   // Flow through the same engine as an observation (so the read model agrees).
+  //
+  // A manual 'ok' (an "all clear" / Resolve) carries a grace TTL: it is
+  // authoritative and SUPPRESSES monitor-driven auto-redeclaration while live
+  // (see evaluateComponent), but must expire so a stale resolve can't mask a
+  // genuine future outage. The manual source's own defaultTtl is null (never
+  // expires), so we set expires_at explicitly here. A manual NON-ok (an active
+  // human declare) gets NO expiry — the banner persists until a human resolves.
+  const expiresAt =
+    opts.signal === 'ok' ? new Date(now.getTime() + MANUAL_OK_GRACE_SECONDS * 1000) : null;
   await appendObservation({
     sourceId: opts.manualSourceId,
     componentId: opts.componentId,
     signal: opts.signal,
     detail: `manual override by ${opts.author}`,
+    expiresAt,
     now,
   });
 

@@ -255,6 +255,16 @@ export function renderIncidentEmail(opts: {
   return { subject, text, html };
 }
 
+/** HTML-escape a free-text value before interpolating it into the email body. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /** HTML email in the status system's TUI dialect (mirrors email.ts magic-link). */
 function incidentEmailHtml(opts: {
   scope: string;
@@ -276,12 +286,12 @@ function incidentEmailHtml(opts: {
   <tr><td align="center" style="padding:48px 16px 0;vertical-align:top;">
     <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;">
       <tr><td style="padding-bottom:24px;">
-        <span style="font-family:'DM Mono','JetBrains Mono',monospace;font-size:13px;font-weight:500;color:#847a67;letter-spacing:.04em;text-transform:lowercase;">${scope.toLowerCase()} status</span>
+        <span style="font-family:'DM Mono','JetBrains Mono',monospace;font-size:13px;font-weight:500;color:#847a67;letter-spacing:.04em;text-transform:lowercase;">${escapeHtml(scope.toLowerCase())} status</span>
       </td></tr>
       <tr><td style="background:#221f1b;border:1px solid #2e2924;border-radius:4px;padding:28px 28px 24px;">
-        <h1 style="margin:0 0 6px;font-family:'DM Sans',system-ui,sans-serif;font-size:20px;font-weight:600;color:#f0e8d4;letter-spacing:-.01em;">${title}</h1>
-        <p style="margin:0 0 14px;font-size:14px;line-height:1.55;color:#aca28c;">${lead}</p>
-        <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#d8cdb4;">${body}</p>
+        <h1 style="margin:0 0 6px;font-family:'DM Sans',system-ui,sans-serif;font-size:20px;font-weight:600;color:#f0e8d4;letter-spacing:-.01em;">${escapeHtml(title)}</h1>
+        <p style="margin:0 0 14px;font-size:14px;line-height:1.55;color:#aca28c;">${escapeHtml(lead)}</p>
+        <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#d8cdb4;">${escapeHtml(body)}</p>
         <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 4px;"><tr><td>
           <a href="${incidentUrl}" style="display:inline-block;padding:10px 24px;background:${accentBg};color:${accent};font-size:13px;font-weight:600;text-decoration:none;border-radius:3px;border:1px solid ${accentBorder};font-family:'DM Mono','JetBrains Mono',monospace;letter-spacing:.02em;">view status &rarr;</a>
         </td></tr></table>

@@ -20,11 +20,21 @@ const PILL_COLOR: Record<string, string> = {
   watch: 'var(--degr)', declared: 'var(--major)', stale: 'var(--faint)',
 };
 
+/** HTML-escape a free-text value before it is emitted via set:html. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /** Inline pill HTML for a status/severity/state token. */
 export function pillHtml(key: string, label?: string): string {
   const c = PILL_COLOR[key] ?? 'var(--muted)';
   const text = (label ?? key).toUpperCase();
-  return `<span class="pill" style="color:${c};border:1px solid ${c};background:rgba(255,255,255,.04)">${text}</span>`;
+  return `<span class="pill" style="color:${c};border:1px solid ${c};background:rgba(255,255,255,.04)">${escapeHtml(text)}</span>`;
 }
 
 export function fmtDate(d: Date | string | null | undefined): string {
