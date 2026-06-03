@@ -70,13 +70,25 @@ export async function updateComponentRow(id: string, patch: Record<string, unkno
  * CASCADES symmetrically: un-archiving a parent un-archives its whole archived
  * subtree, so a node restored after a cascade-archive can never re-appear with
  * its children left invisible (the C2 hidden-services class via the restore
- * path). We walk descendants over ALL rows (descendantIdsIncludingArchived)
- * because descendantIds() filters out archived rows and would not find them.
+ * path). Restore is scoped to the SAME cascade BATCH: we un-archive only the
+ * descendants whose archived_at equals the restored node's own archived_at (a
+ * cascade writes one `new Date()` across the whole batch). Descendants with an
+ * EARLIER archived_at were retired INDEPENDENTLY before this cascade and must
+ * STAY archived — restoring a parent never silently revives a deliberately
+ * retired child. We enumerate descendants over ALL rows
+ * (descendantIdsIncludingArchived) because descendantIds() filters out archived
+ * rows and would not find them.
  */
 export async function setComponentArchived(id: string, archived: boolean) {
   if (!archived) {
+    const node = await getComponentRow(id);
+    if (!node || node.archivedAt == null) return; // already live / missing
     const ids = await descendantIdsIncludingArchived(id);
-    await db.update(components).set({ archivedAt: null }).where(inArray(components.id, ids));
+    // Only reverse rows archived in the same cascade batch (matching timestamp);
+    // descendants archived earlier (independently retired) must stay archived.
+    await db.update(components).set({ archivedAt: null }).where(
+      and(inArray(components.id, ids), eq(components.archivedAt, node.archivedAt)),
+    );
     return;
   }
   const ids = await descendantIds(id);

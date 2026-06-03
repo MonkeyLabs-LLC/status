@@ -14,14 +14,15 @@
  * A source past its TTL (observation.expires_at, or default_ttl from now)
  * is STALE: it drops out of quorum and flags reduced coverage (dead-man).
  *
- * A LIVE `manual` observation is AUTHORITATIVE for its component and out-votes
- * the monitor quorum above: a human 'ok' (Resolve / "all clear") forces
- * OPERATIONAL and SUPPRESSES auto-redeclaration even while ≥2 monitors still
- * report down (so a Resolve is not undone + re-spammed every sweep); a human
- * non-ok DECLARES on its own. The manual 'ok' carries a grace TTL so the
- * suppression expires and the engine falls back to monitor quorum — a stale
- * resolve can never permanently mask a genuine future outage. Only when NO live
- * manual read exists does the ≥2-monitor quorum decide.
+ * A LIVE `manual` observation carries weight, but is SUBORDINATE to monitor
+ * corroboration: monitors win on agreement. A human non-ok DECLARES on its own
+ * (human escalation is authoritative, no expiry). A human 'ok' (Resolve / "all
+ * clear") forces OPERATIONAL ONLY when fewer than two live monitors disagree —
+ * it can clear a single-source / flapping / human-declared situation, but it can
+ * NOT suppress an outage that ≥2 live monitors independently corroborate. The
+ * manual 'ok' carries a grace TTL so even that limited suppression expires and
+ * the engine falls back to monitor quorum — a stale resolve can never mask a
+ * genuine future outage.
  *
  * Incident *existence* is engine-owned. Incident *status*
  * (investigating->identified->monitoring->resolved) stays human-editable —
@@ -46,13 +47,13 @@ export type Level = 'degraded' | 'major';
 /**
  * Grace window (seconds) attached to a manual `ok` ("all clear") override.
  *
- * A live manual `ok` is AUTHORITATIVE: it suppresses auto-redeclaration even
- * while monitors still report `down` (see evaluateComponent). To stop a stale
- * resolve from permanently masking a genuine FUTURE outage, that suppression
- * must expire — after this window the manual `ok` becomes stale, drops out, and
- * the engine falls back to monitor quorum. A manual NON-ok (an active human
- * declare) is deliberately NOT given a TTL: the banner must persist until a
- * human resolves it.
+ * A live manual `ok` can suppress only a sub-corroboration situation (fewer than
+ * two live monitors disagree — see evaluateComponent; it can NOT out-vote a
+ * ≥2-monitor outage). To stop even that limited suppression from masking a
+ * genuine FUTURE outage, it must expire — after this window the manual `ok`
+ * becomes stale, drops out, and the engine falls back to monitor quorum. A
+ * manual NON-ok (an active human declare) is deliberately NOT given a TTL: the
+ * banner must persist until a human resolves it.
  */
 export const MANUAL_OK_GRACE_SECONDS = 3600;
 
@@ -112,6 +113,11 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
   let staleCount = 0;
   let nonOkCount = 0;
   let liveCount = 0;
+  // Live MONITOR (non-manual) non-ok reads only — the corroboration set. A
+  // manual read never counts here so that monitor corroboration is measured
+  // independently of any human verdict (see decision precedence below).
+  let monitorNonOkCount = 0;
+  let monitorDownAgrees = false;
   // The latest LIVE (non-expired) manual read, if any. `rows` is ordered newest
   // observation first per source, and the manual source emits at most one live
   // read, so the first live manual row we see is the current human verdict.
@@ -139,6 +145,10 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
       }
       if (read.signal !== 'ok') {
         nonOkCount++;
+        if (r.kind !== 'manual') {
+          monitorNonOkCount++;
+          if (read.signal === 'down') monitorDownAgrees = true;
+        }
       }
     }
   }
@@ -147,34 +157,47 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
   const downAgrees = liveReads.some((r) => r.signal === 'down');
   let state: QuorumState;
   let level: Level | null = null;
-  // Decision precedence:
+  // Decision precedence — MONITORS WIN ON CORROBORATION; a manual read carries
+  // weight but is SUBORDINATE to ≥2-monitor agreement:
   //
-  //   1. A LIVE manual read is AUTHORITATIVE for its component (a human's verdict
-  //      out-votes the monitors):
-  //        - manual 'ok'  -> OPERATIONAL. Suppress auto-(re)declaration even while
-  //          ≥2 monitors still report 'down', so an admin's "all clear" / Resolve
-  //          is not undone (and re-spammed) on the very next sweep. This `ok` is
-  //          given a grace TTL at write time (MANUAL_OK_GRACE_SECONDS), so once it
-  //          expires it becomes stale, drops out here, and we fall through to the
-  //          monitor quorum below — a stale resolve can never permanently mask a
-  //          genuine future outage. An EXPIRED manual 'ok' is, by virtue of `stale`,
-  //          simply absent here.
-  //        - manual non-ok -> DECLARE at that level. This is the existing
-  //          single-source manual bypass (a human declare pages on its own and
-  //          never auto-expires).
-  //   2. No live manual read -> fall back to monitor quorum: ≥2 independent live
-  //      sources agree non-ok → DECLARE; exactly one → WATCH (surfaced, never
-  //      pages); zero → OPERATIONAL.
+  //   1. ≥2 live MONITOR (non-manual) reads non-ok -> DECLARE at the worst
+  //      agreeing monitor level (any monitor 'down' -> major, else degraded). A
+  //      live manual 'ok' CANNOT suppress this — restores the "no invisible
+  //      outage" guarantee. (CRITICAL/HIGH fix: previously a single manual 'ok'
+  //      out-voted everything, so a write-scope token re-POSTing PATCH
+  //      .../incidents/:id {"status":"resolved"} every <MANUAL_OK_GRACE_SECONDS
+  //      pinned a monitor-confirmed outage GREEN forever, and one premature
+  //      "all clear" hid a corroborated outage for up to an hour.)
+  //   2. Else a live manual NON-ok exists -> DECLARE at its level. Human
+  //      escalation stays authoritative and never auto-expires (a human declare
+  //      pages on its own; no monitor corroboration required).
+  //   3. Else a live manual 'ok' exists -> OPERATIONAL. With <2 monitors
+  //      disagreeing a human can still clear a single-source / flapping
+  //      situation. This `ok` is given a grace TTL at write time
+  //      (MANUAL_OK_GRACE_SECONDS), so once it expires it becomes stale, drops
+  //      out here, and we fall through to monitor quorum — a stale resolve can
+  //      never permanently mask a future outage. An EXPIRED manual 'ok' is, by
+  //      virtue of `stale`, simply absent here.
+  //   4. Else fall back to the monitor quorum on ALL live non-ok reads: ≥2 agree
+  //      -> DECLARE; exactly one -> WATCH (surfaced, never pages); zero -> OK.
   //
-  // The single-source bypass is gated on kind='manual', NOT weight — so one
-  // mis-weighted monitor can never page an outage without corroboration.
-  if (liveManual) {
-    if (liveManual.signal === 'ok') {
-      state = 'ok';
-    } else {
-      state = 'declared';
-      level = liveManual.signal === 'down' ? 'major' : 'degraded';
-    }
+  // Note: because a manual 'ok' no longer auto-resolves a ≥2-monitor-corroborated
+  // component (case 1 wins), the existing open auto-incident simply STAYS open —
+  // no auto-resolve, so no new incident, so no re-declare/re-spam churn. This does
+  // NOT reintroduce the original R4 churn: reconcileIncident only OPENS when no
+  // incident is already open (see openIncidentFor / the `!open` guard), so a
+  // standing outage keeps its one incident rather than spawning a second.
+  //
+  // The corroboration set is gated on kind!='manual', NOT weight — so one
+  // mis-weighted monitor can never page an outage without independent agreement.
+  if (monitorNonOkCount >= 2) {
+    state = 'declared';
+    level = monitorDownAgrees ? 'major' : 'degraded';
+  } else if (liveManual && liveManual.signal !== 'ok') {
+    state = 'declared';
+    level = liveManual.signal === 'down' ? 'major' : 'degraded';
+  } else if (liveManual && liveManual.signal === 'ok') {
+    state = 'ok';
   } else if (nonOkCount >= 2) {
     state = 'declared';
     level = downAgrees ? 'major' : 'degraded';
@@ -429,15 +452,16 @@ export async function recordManualOverride(opts: {
   const now = opts.now ?? new Date();
   // Flow through the same engine as an observation (so the read model agrees).
   //
-  // A manual 'ok' (an "all clear" / Resolve) carries a grace TTL: it is
-  // authoritative and SUPPRESSES monitor-driven auto-redeclaration while live
-  // (see evaluateComponent), but must expire so a stale resolve can't mask a
-  // genuine future outage. The manual source's own defaultTtl is null (never
-  // expires), so we set expires_at explicitly here. A manual NON-ok (an active
-  // human declare) gets NO expiry — the banner persists until a human resolves.
+  // A manual 'ok' (an "all clear" / Resolve) carries a grace TTL: it can clear a
+  // sub-corroboration situation (<2 monitors disagree) but is SUBORDINATE to a
+  // ≥2-monitor outage (see evaluateComponent), and must expire so even that
+  // limited suppression can't mask a genuine future outage. The manual source's
+  // own defaultTtl is null (never expires), so we set expires_at explicitly here.
+  // A manual NON-ok (an active human declare) gets NO expiry — the banner
+  // persists until a human resolves.
   const expiresAt =
     opts.signal === 'ok' ? new Date(now.getTime() + MANUAL_OK_GRACE_SECONDS * 1000) : null;
-  await appendObservation({
+  const { evaluation } = await appendObservation({
     sourceId: opts.manualSourceId,
     componentId: opts.componentId,
     signal: opts.signal,
@@ -450,7 +474,21 @@ export async function recordManualOverride(opts: {
   const name = await componentName(opts.componentId);
 
   if (opts.signal === 'ok') {
-    if (open) {
+    // A manual 'ok' resolves the open incident ONLY when the engine itself now
+    // derives the component OK. Monitors win on corroboration: if ≥2 live
+    // monitors still report non-ok, evaluateComponent keeps state='declared'
+    // (the manual 'ok' is subordinate — see the decision precedence), and we
+    // must NOT force the incident resolved here. Doing so would flip the page
+    // green against monitor truth and, worse, let the next sweep re-open a NEW
+    // incident (re-spam) since the component is still declared. So we only
+    // resolve when state !== 'declared' — when fewer than two monitors disagree
+    // and the human's "all clear" actually carried. This closes the CRITICAL
+    // (re-POSTed resolve can no longer pin a monitor-confirmed outage GREEN)
+    // and the HIGH (a single all-clear can no longer suppress a corroborated
+    // outage). reconcileIncident already auto-resolved the incident inside
+    // appendObservation when the engine agreed it was OK, so this block is the
+    // human-owned (auto=false) resolution path.
+    if (open && evaluation.state !== 'declared') {
       await db.update(incidents)
         .set({ status: 'resolved', resolvedAt: now })
         .where(eq(incidents.id, open.id));

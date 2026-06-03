@@ -12,7 +12,7 @@ import ResourceForm from '@/components/admin/ResourceForm.astro';
 import { getResource } from '@/lib/admin/resources';
 import { getManualSource } from '@/lib/sources';
 import { recordManualOverride, openIncidentFor, type Level } from '@/lib/quorum';
-import { componentExists } from '@/lib/components';
+import { componentExists, isLeafComponent } from '@/lib/components';
 import { componentOptions } from '@/lib/admin/view';
 import { navCounts, propertyOptions } from '@/lib/admin/nav';
 
@@ -28,14 +28,18 @@ if (Astro.request.method === 'POST') {
   const affects = form.getAll('affects').map((a) => a.toString()).filter(Boolean);
 
   let unknown = '';
+  let nonLeaf = '';
   for (const a of affects) {
     if (!(await componentExists(a))) { unknown = a; break; }
+    if (!(await isLeafComponent(a))) { nonLeaf = a; break; }
   }
 
   if (!title || !summary || affects.length === 0) {
     error = 'Title, customer message, and at least one affected component are required.';
   } else if (unknown) {
     error = `Unknown component "${unknown}".`;
+  } else if (nonLeaf) {
+    error = `Component "${nonLeaf}" is not a leaf (declare on a service or host).`;
   } else {
     const level: Level = severity === 'major' ? 'major' : 'degraded';
     const manual = await getManualSource();
