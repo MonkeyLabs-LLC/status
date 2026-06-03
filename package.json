@@ -11,7 +11,9 @@
     "astro": "astro",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@astrojs/netlify": "^6.3.0",
@@ -24,6 +26,7 @@
     "@astrojs/check": "^0.9.4",
     "@types/node": "^22.0.0",
     "drizzle-kit": "^0.30.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.8"
   }
 }

@@ -1,0 +1,174 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// The quorum engine reads the latest observation-per-source via a single raw
+// `db.execute(sql\`...\`)`. We mock @/db so that call returns an injectable row
+// set — letting us drive evaluateComponent's PURE decision precedence with no
+// Postgres. (evaluateComponent performs no writes; insert/update are stubbed.)
+const execRows = { current: [] as any[] };
+
+vi.mock('@/db', () => ({
+  db: {
+    execute: vi.fn(async () => execRows.current),
+    select: vi.fn(() => ({ from: () => ({ where: async () => [] }) })),
+    insert: vi.fn(() => ({ values: async () => undefined })),
+    update: vi.fn(() => ({ set: () => ({ where: async () => undefined }) })),
+  },
+}));
+
+import { evaluateComponent, evaluationToStatus, MANUAL_OK_GRACE_SECONDS } from './quorum';
+
+const NOW = new Date('2026-06-03T12:00:00Z');
+
+// Build a DISTINCT-ON-shaped row as evaluateComponent expects from db.execute.
+function row(opts: {
+  sourceId: string;
+  kind?: 'monitor' | 'manual';
+  signal: 'ok' | 'degraded' | 'down';
+  weight?: number;
+  revoked?: boolean;
+  expiresInSec?: number | null; // null/undefined => never expires
+}) {
+  const expires =
+    opts.expiresInSec === undefined || opts.expiresInSec === null
+      ? null
+      : new Date(NOW.getTime() + opts.expiresInSec * 1000);
+  return {
+    source_id: opts.sourceId,
+    name: opts.sourceId,
+    weight: opts.weight ?? 1,
+    kind: opts.kind ?? 'monitor',
+    revoked_at: opts.revoked ? NOW : null,
+    signal: opts.signal,
+    detail: null,
+    observed_at: NOW,
+    expires_at: expires,
+  };
+}
+
+async function evalWith(rows: any[]) {
+  execRows.current = rows;
+  return evaluateComponent('c1', NOW);
+}
+
+beforeEach(() => {
+  execRows.current = [];
+});
+
+describe('quorum evaluateComponent — decision precedence (audit R5)', () => {
+  it('zero non-ok reads => operational/ok', async () => {
+    const ev = await evalWith([row({ sourceId: 'm1', signal: 'ok' }), row({ sourceId: 'm2', signal: 'ok' })]);
+    expect(ev.state).toBe('ok');
+    expect(ev.level).toBeNull();
+    expect(evaluationToStatus(ev)).toBe('operational');
+  });
+
+  it('exactly one monitor non-ok => watch (surfaced, never declares/pages)', async () => {
+    const ev = await evalWith([row({ sourceId: 'm1', signal: 'down' }), row({ sourceId: 'm2', signal: 'ok' })]);
+    expect(ev.state).toBe('watch');
+    expect(ev.level).toBeNull();
+    expect(evaluationToStatus(ev)).toBe('operational'); // watch reads operational publicly
+  });
+
+  it('>=2 monitors non-ok => declared (threshold pin)', async () => {
+    const ev = await evalWith([row({ sourceId: 'm1', signal: 'degraded' }), row({ sourceId: 'm2', signal: 'degraded' })]);
+    expect(ev.state).toBe('declared');
+    expect(ev.level).toBe('degraded');
+    expect(evaluationToStatus(ev)).toBe('degraded');
+  });
+
+  it('>=2 monitors with any "down" => declared MAJOR (worst-agreeing level)', async () => {
+    const ev = await evalWith([row({ sourceId: 'm1', signal: 'down' }), row({ sourceId: 'm2', signal: 'degraded' })]);
+    expect(ev.state).toBe('declared');
+    expect(ev.level).toBe('major');
+    expect(evaluationToStatus(ev)).toBe('outage');
+  });
+
+  // --- THE R5 ENGINE FIX: manual 'ok' is SUBORDINATE to >=2-monitor corroboration ---
+
+  it('REGRESSION (R5 CRITICAL): a live manual "ok" CANNOT suppress a >=2-monitor outage', async () => {
+    // Two independent monitors report down; an admin "all clear" (manual ok) is
+    // also live. Pre-fix, the manual ok out-voted everything (page green forever
+    // via re-POSTed resolve). Post-fix, monitor corroboration wins: still declared.
+    const ev = await evalWith([
+      row({ sourceId: 'm1', signal: 'down' }),
+      row({ sourceId: 'm2', signal: 'down' }),
+      row({ sourceId: 'manual', kind: 'manual', signal: 'ok', weight: 100, expiresInSec: MANUAL_OK_GRACE_SECONDS }),
+    ]);
+    expect(ev.state).toBe('declared');
+    expect(ev.level).toBe('major');
+    expect(evaluationToStatus(ev)).toBe('outage');
+  });
+
+  it('REGRESSION: a high-weight manual "ok" cannot out-vote monitors (gating is kind!=manual, not weight)', async () => {
+    const ev = await evalWith([
+      row({ sourceId: 'm1', signal: 'degraded' }),
+      row({ sourceId: 'm2', signal: 'degraded' }),
+      row({ sourceId: 'manual', kind: 'manual', signal: 'ok', weight: 9999 }),
+    ]);
+    expect(ev.state).toBe('declared');
+    expect(ev.level).toBe('degraded');
+  });
+
+  it('manual "ok" DOES clear a single-monitor (sub-corroboration) situation', async () => {
+    // Only one monitor disagrees => human "all clear" is allowed to carry.
+    const ev = await evalWith([
+      row({ sourceId: 'm1', signal: 'down' }),
+      row({ sourceId: 'manual', kind: 'manual', signal: 'ok', expiresInSec: MANUAL_OK_GRACE_SECONDS }),
+    ]);
+    expect(ev.state).toBe('ok');
+    expect(evaluationToStatus(ev)).toBe('operational');
+  });
+
+  it('a live manual NON-ok DECLARES on its own (human escalation authoritative)', async () => {
+    const ev = await evalWith([row({ sourceId: 'manual', kind: 'manual', signal: 'down' })]);
+    expect(ev.state).toBe('declared');
+    expect(ev.level).toBe('major');
+  });
+
+  it('manual "degraded" declares at degraded level', async () => {
+    const ev = await evalWith([row({ sourceId: 'manual', kind: 'manual', signal: 'degraded' })]);
+    expect(ev.state).toBe('declared');
+    expect(ev.level).toBe('degraded');
+  });
+
+  it('an EXPIRED manual "ok" drops out (stale) and the engine falls back to monitor quorum', async () => {
+    // Manual ok expired (grace elapsed). One live monitor down remains => watch,
+    // not a masked "ok". A stale resolve can never permanently mask an outage.
+    const ev = await evalWith([
+      row({ sourceId: 'm1', signal: 'down' }),
+      row({ sourceId: 'manual', kind: 'manual', signal: 'ok', expiresInSec: -10 }),
+    ]);
+    expect(ev.state).toBe('watch');
+    expect(ev.reducedCoverage).toBe(true); // the expired manual read counts as stale coverage loss
+  });
+
+  it('revoked sources are ignored entirely (cannot contribute to quorum)', async () => {
+    const ev = await evalWith([
+      row({ sourceId: 'm1', signal: 'down', revoked: true }),
+      row({ sourceId: 'm2', signal: 'down', revoked: true }),
+    ]);
+    expect(ev.state).toBe('ok');
+    expect(ev.totalSources).toBe(0);
+  });
+
+  it('dead-man: all reads stale => no live reads, reducedCoverage set (hold, do not auto-resolve)', async () => {
+    const ev = await evalWith([
+      row({ sourceId: 'm1', signal: 'down', expiresInSec: -100 }),
+      row({ sourceId: 'm2', signal: 'down', expiresInSec: -100 }),
+    ]);
+    expect(ev.hasLiveReads).toBe(false);
+    expect(ev.reducedCoverage).toBe(true);
+    // state derives ok from zero LIVE non-ok reads — reconcileIncident's
+    // hasLiveReads guard is what prevents auto-resolve during blackout.
+    expect(ev.state).toBe('ok');
+  });
+});
+
+describe('evaluationToStatus mapping', () => {
+  it('declared+major => outage, declared+degraded => degraded, else operational', () => {
+    expect(evaluationToStatus({ state: 'declared', level: 'major' } as any)).toBe('outage');
+    expect(evaluationToStatus({ state: 'declared', level: 'degraded' } as any)).toBe('degraded');
+    expect(evaluationToStatus({ state: 'watch', level: null } as any)).toBe('operational');
+    expect(evaluationToStatus({ state: 'ok', level: null } as any)).toBe('operational');
+  });
+});
