@@ -2,8 +2,12 @@ import type { APIRoute } from 'astro';
 import { db } from '@/db';
 import { incidents, incidentTimeline } from '@/db/schema';
 import { validateApiToken } from '@/lib/api-tokens';
+import { componentExists, isLeafComponent } from '@/lib/components';
 import { eq, desc, and, arrayContains } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+
+const VALID_SEVERITY = ['minor', 'moderate', 'major'];
+const VALID_STATUS = ['investigating', 'identified', 'monitoring', 'resolved'];
 
 async function authenticate(request: Request, requiredScope: 'read' | 'write' | 'full') {
   const auth = request.headers.get('Authorization');
@@ -44,6 +48,22 @@ export const POST: APIRoute = async ({ request }) => {
   const { title, summary, severity, affects, status: incStatus } = body;
   if (!title || !summary || !severity || !affects?.length) {
     return new Response(JSON.stringify({ error: { code: 'bad_request', message: 'title, summary, severity, and affects are required.' } }), { status: 400 });
+  }
+  if (!VALID_SEVERITY.includes(severity)) {
+    return new Response(JSON.stringify({ error: { code: 'bad_request', message: `severity must be one of ${VALID_SEVERITY.join(', ')}.` } }), { status: 400 });
+  }
+  if (incStatus != null && !VALID_STATUS.includes(incStatus)) {
+    return new Response(JSON.stringify({ error: { code: 'bad_request', message: `status must be one of ${VALID_STATUS.join(', ')}.` } }), { status: 400 });
+  }
+  // Every affected id must resolve to a real LEAF component (service/host), or
+  // the incident is invisible / declared up the tree.
+  for (const a of affects) {
+    if (!(await componentExists(a))) {
+      return new Response(JSON.stringify({ error: { code: 'bad_request', message: `Unknown component "${a}".` } }), { status: 400 });
+    }
+    if (!(await isLeafComponent(a))) {
+      return new Response(JSON.stringify({ error: { code: 'bad_request', message: `Component "${a}" is not a leaf (declare on a service or host).` } }), { status: 400 });
+    }
   }
 
   const id = nanoid();

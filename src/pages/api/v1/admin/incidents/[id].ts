@@ -64,17 +64,32 @@ export const PATCH: APIRoute = async (ctx) => {
 
   // Status move: human-owned narration. Write field + a timeline entry.
   if (body.status && body.status !== inc.status) {
-    const updates: Record<string, unknown> = { status: body.status };
-    if (body.status === 'resolved') updates.resolvedAt = now;
-    await db.update(incidents).set(updates).where(eq(incidents.id, id));
-    await db.insert(incidentTimeline).values({
-      id: nanoid(), incidentId: id, at: now,
-      label: String(body.status).toUpperCase(),
-      body: body.note || `Status moved to ${body.status}.`,
-      author: who,
-    });
-    // Narrate the human status move (resolved status → 'resolved' email).
-    await notifyIncident(id, body.status === 'resolved' ? 'resolved' : 'update');
+    if (body.status === 'resolved') {
+      // Force-resolve through the engine (manual 'ok' observation), NOT a bare
+      // status flip — otherwise the next sweep sees a live manual non-ok read
+      // and re-opens a zombie auto-incident. Mirrors resolve.ts.
+      const manual = await getManualSource();
+      const before = await snapshotComponent(inc.affects[0]);
+      await recordManualOverride({
+        manualSourceId: manual.id,
+        componentId: inc.affects[0],
+        signal: 'ok',
+        body: body.note || `Resolved by ${who}.`,
+        author: who,
+        now,
+      });
+      await notifyForComponent(inc.affects[0], before);
+    } else {
+      await db.update(incidents).set({ status: body.status }).where(eq(incidents.id, id));
+      await db.insert(incidentTimeline).values({
+        id: nanoid(), incidentId: id, at: now,
+        label: String(body.status).toUpperCase(),
+        body: body.note || `Status moved to ${body.status}.`,
+        author: who,
+      });
+      // Narrate the human status move.
+      await notifyIncident(id, 'update');
+    }
   }
 
   // Plain title / summary edits (narration metadata).

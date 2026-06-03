@@ -9,7 +9,11 @@
  */
 import type { APIRoute } from 'astro';
 import { requireAdmin, ok, err } from '@/lib/admin-api';
-import { updateComponentRow, setComponentArchived } from '@/lib/db-components';
+import { updateComponentRow, setComponentArchived, ArchiveBlockedError } from '@/lib/db-components';
+import { componentExists, descendantIds } from '@/lib/components';
+import { COMPONENT_KIND_OPTIONS } from '@/lib/admin/resources';
+
+const KINDS = COMPONENT_KIND_OPTIONS.map((o) => o.value);
 
 export const PATCH: APIRoute = async (ctx) => {
   const who = await requireAdmin(ctx);
@@ -18,6 +22,17 @@ export const PATCH: APIRoute = async (ctx) => {
   const b = await ctx.request.json().catch(() => null);
   if (!b) return err('bad_request', 'Invalid JSON body.', 400);
   if (b.action === 'unarchive') { await setComponentArchived(id, false); return ok({ id }); }
+  if (b.kind !== undefined && !KINDS.includes(b.kind)) {
+    return err('bad_request', `kind must be one of: ${KINDS.join(', ')}.`, 400);
+  }
+  if (b.parentId !== undefined && b.parentId) {
+    if (b.parentId === id) return err('bad_request', 'A component cannot be its own parent.', 400);
+    if (!(await componentExists(b.parentId))) return err('bad_request', `Unknown parent component "${b.parentId}".`, 400);
+    // Cycle guard (H3): reject a parent that lives in this node's own subtree.
+    if ((await descendantIds(id)).includes(b.parentId)) {
+      return err('bad_request', 'Cannot set a descendant as the parent (would create a cycle).', 400);
+    }
+  }
   const u: Record<string, unknown> = {};
   if (b.name) u.name = b.name;
   if (b.kind) u.kind = b.kind;
@@ -33,6 +48,11 @@ export const PATCH: APIRoute = async (ctx) => {
 export const DELETE: APIRoute = async (ctx) => {
   const who = await requireAdmin(ctx);
   if (who instanceof Response) return who;
-  await setComponentArchived(ctx.params.id!, true);
+  try {
+    await setComponentArchived(ctx.params.id!, true);
+  } catch (e) {
+    if (e instanceof ArchiveBlockedError) return err('conflict', e.message, 409);
+    throw e;
+  }
   return ok({ archived: true });
 };

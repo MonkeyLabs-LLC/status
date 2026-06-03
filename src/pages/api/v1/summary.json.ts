@@ -48,7 +48,10 @@ export const GET: APIRoute = async ({ locals, url }) => {
   const scope = qScope || ((locals as any).scope as string | null) || null;
   try {
     const root = await buildSummaryTree(scope);
-    if (!root) return new Response(body(scope, null, 'operational'), { status: 200, headers });
+    // A null root (scope's landing-root missing/archived/wrong-scope/partial
+    // seed) is a data-integrity failure, not an "all clear" — fail CLOSED past
+    // the catch so we never emit 'operational'+live:true for a vanished tree.
+    if (!root) return new Response(unknownBody(scope), { status: 503, headers });
     return new Response(body(scope, root, root.status), { status: 200, headers });
   } catch (_e) {
     // DB/derivation failure: fail CLOSED. Never claim 'operational' on error —

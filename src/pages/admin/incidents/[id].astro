@@ -34,11 +34,13 @@ if (Astro.request.method === 'POST') {
     if (action === 'move_status') {
       const status = form.get('status')?.toString() ?? '';
       const note = form.get('note')?.toString() || `Status moved to ${status}.`;
+      // Whitelist the status — a forged value must not reach incidents.status.
+      const ALLOWED_STATUS = ['investigating', 'identified', 'monitoring', 'resolved'];
       if (status === 'resolved') {
         // Force-resolve through the engine (manual source clears its read).
         const manual = await getManualSource();
         await recordManualOverride({ manualSourceId: manual.id, componentId: cur.affects[0], signal: 'ok', body: note, author: who });
-      } else if (status) {
+      } else if (ALLOWED_STATUS.includes(status)) {
         await db.update(incidents).set({ status }).where(eq(incidents.id, id));
         await db.insert(incidentTimeline).values({ id: nanoid(), incidentId: id, at: new Date(), label: status.toUpperCase(), body: note, author: who });
       }

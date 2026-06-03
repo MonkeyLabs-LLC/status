@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getPublicLeafComponents } from '../../lib/components';
+import { getPublicLeafComponents, buildSummaryTree } from '../../lib/components';
 import { getActiveIncidents } from '../../lib/db-incidents';
 import { getUpcomingMaintenance } from '../../lib/db-maintenance';
 import { worstStatus, statusToState } from '../../lib/types';
@@ -10,7 +10,15 @@ export const GET: APIRoute = async ({ locals }) => {
   try {
     // Derive from the components tree so this AGREES with /api/v1/summary.json.
     const services = await getPublicLeafComponents(scope || null);
-    const overall = worstStatus(services as any);
+    // Fold the root's effective (worst-of-subtree) status in as the floor so an
+    // incident declared directly on a non-leaf product/org node — which never
+    // appears in the leaf list — still moves `overall`. Keeps status.json in
+    // agreement with summary.json/HTML regardless of which node kind is DECLARED.
+    const root = await buildSummaryTree(scope || null);
+    const overall = worstStatus([
+      ...(services as any),
+      ...(root ? [{ status: root.status }] : []),
+    ] as any);
     const activeIncidents = await getActiveIncidents(scope || undefined);
     const maintenances = await getUpcomingMaintenance(scope || undefined);
 
@@ -47,17 +55,20 @@ export const GET: APIRoute = async ({ locals }) => {
       },
     });
   } catch (_e) {
-    // DB unreachable — return empty operational state
+    // DB/derivation failure: fail CLOSED. Never synthesize 'operational' on an
+    // error — emit 'unknown' + live:false with a 503 so badges/monitors treat us
+    // as unverifiable, mirroring summary.json's dead-man rule.
     const body = {
-      status: 'operational',
-      state: 'working',
+      status: 'unknown',
+      state: 'unknown',
+      live: false,
       services: [],
       activeIncidents: [],
       scheduledMaintenance: [],
     };
 
     return new Response(JSON.stringify(body, null, 2), {
-      status: 200,
+      status: 503,
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'public, max-age=30',

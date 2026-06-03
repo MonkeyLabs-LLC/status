@@ -30,7 +30,7 @@ import { db } from '@/db';
 import { incidents, incidentTimeline, components, subscribers } from '@/db/schema';
 import { eq, ne, desc, and, isNull, sql } from 'drizzle-orm';
 import { sendIncidentEmail } from './email';
-import { UMBRELLA_ID, COMPANY, STATUS_DOMAIN } from '@/pulse.config';
+import { UMBRELLA_ID, COMPANY, STATUS_DOMAIN, scopeBrand } from '@/pulse.config';
 
 /** What kind of lifecycle event we are narrating to subscribers. */
 export type NotifyKind = 'opened' | 'update' | 'resolved';
@@ -205,8 +205,8 @@ async function resolveScopeName(affects: string[]): Promise<string> {
   }
   const key = product ?? orgFallback ?? UMBRELLA_ID;
   if (key === UMBRELLA_ID) return COMPANY;
-  // Title-case a product key for chrome (e.g. 'sessions' -> 'Sessions').
-  return key.charAt(0).toUpperCase() + key.slice(1);
+  // Resolve the display name through the seam, never re-derive it here.
+  return scopeBrand(key).wordmark;
 }
 
 /** Public incident permalink, scoped to the status site. */

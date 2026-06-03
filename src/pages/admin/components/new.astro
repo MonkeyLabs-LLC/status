@@ -6,10 +6,12 @@
 import AdminShell from '@/layouts/AdminShell.astro';
 import ResourceForm from '@/components/admin/ResourceForm.astro';
 import { createComponentRow, getComponentRow } from '@/lib/db-components';
-import { getResource } from '@/lib/admin/resources';
+import { componentExists } from '@/lib/components';
+import { getResource, COMPONENT_KIND_OPTIONS } from '@/lib/admin/resources';
 import { componentParentOptions } from '@/lib/admin/view';
 import { navCounts, propertyOptions } from '@/lib/admin/nav';
 
+const KINDS = COMPONENT_KIND_OPTIONS.map((o) => o.value);
 const resource = getResource('components')!;
 const adminEmail = (Astro.locals as App.Locals).adminEmail ?? 'admin';
 let error = '';
@@ -19,16 +21,21 @@ if (Astro.request.method === 'POST') {
   const id = (form.get('id')?.toString() ?? '').trim();
   const name = form.get('name')?.toString() ?? '';
   const kind = form.get('kind')?.toString() ?? '';
+  const parentId = form.get('parentId')?.toString() || null;
   if (!id || !name || !kind) {
     error = 'ID, name and kind are required.';
   } else if (!/^[a-z0-9-]+$/.test(id)) {
     error = 'ID must be lowercase letters, numbers and dashes only.';
+  } else if (!KINDS.includes(kind)) {
+    error = `Kind must be one of: ${KINDS.join(', ')}.`;
   } else if (await getComponentRow(id)) {
     error = `A component with id "${id}" already exists.`;
+  } else if (parentId && !(await componentExists(parentId))) {
+    error = `Unknown parent component "${parentId}".`;
   } else {
     await createComponentRow({
       id, name, kind,
-      parentId: form.get('parentId')?.toString() || null,
+      parentId,
       tag: form.get('tag')?.toString() || null,
       brand: form.get('brand')?.toString() || null,
       domain: form.get('domain')?.toString() || null,

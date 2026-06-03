@@ -8,6 +8,7 @@ import { db } from '@/db';
 import { maintenance } from '@/db/schema';
 import { nanoid } from 'nanoid';
 import { getResource } from '@/lib/admin/resources';
+import { componentExists, isLeafComponent } from '@/lib/components';
 import { componentOptions } from '@/lib/admin/view';
 import { navCounts, propertyOptions } from '@/lib/admin/nav';
 
@@ -23,8 +24,15 @@ if (Astro.request.method === 'POST') {
   const end = form.get('scheduledEnd')?.toString() ?? '';
   const affects = form.getAll('affects').map((a) => a.toString()).filter(Boolean);
 
+  let unknown = '';
+  for (const a of affects) {
+    if (!(await componentExists(a)) || !(await isLeafComponent(a))) { unknown = a; break; }
+  }
+
   if (!title || !summary || !start || !end || affects.length === 0) {
     error = 'All fields are required, including at least one affected component.';
+  } else if (unknown) {
+    error = `Unknown or non-leaf component "${unknown}".`;
   } else {
     await db.insert(maintenance).values({
       id: nanoid(), title, summary,

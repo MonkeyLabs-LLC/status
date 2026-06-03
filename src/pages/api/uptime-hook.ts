@@ -28,6 +28,14 @@ const SIGNAL_MAP: Record<string, Signal | 'maint'> = {
   maint: 'maint',
 };
 
+/**
+ * Dead-man TTL for UptimeRobot observations. The external probe heartbeats on a
+ * fixed interval; an observation must expire at ~2x that interval so a probe
+ * that simply dies goes stale instead of pinning the last 'ok' forever. Default
+ * to 600s (~2x a 5-minute probe) when no interval is configured.
+ */
+const UPTIME_OBS_TTL_SECONDS = Number(process.env.UPTIME_HOOK_TTL_SECONDS) || 600;
+
 export const POST: APIRoute = async ({ request }) => {
   const secret = process.env.UPTIME_HOOK_SECRET;
   if (!secret) {
@@ -77,6 +85,7 @@ export const POST: APIRoute = async ({ request }) => {
         componentId: service_id, // the raw label IS the component id for this trusted adapter
         signal: mapped,
         detail: 'uptime-hook',
+        defaultTtlSeconds: UPTIME_OBS_TTL_SECONDS, // dead-man: stale if the probe dies
       });
       await notifyForComponent(service_id, before);
     }

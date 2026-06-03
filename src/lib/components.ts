@@ -12,7 +12,7 @@ import { components } from '@/db/schema';
 import { isNull, asc, eq } from 'drizzle-orm';
 import type { ServiceStatus, Incident } from './types';
 import { statusToState } from './types';
-import { derivedComponentStatuses } from './quorum';
+import { derivedComponentStatuses, evaluateComponent, openIncidentFor } from './quorum';
 import { getActiveIncidents } from './db-incidents';
 import { rootComponentId, UMBRELLA_ID } from '@/pulse.config';
 import type { ScopeView, ViewChild, CrumbItem } from './view';
@@ -68,14 +68,18 @@ function ownStatus(t: Tree, id: string): ServiceStatus {
   const c = t.byId.get(id);
   return c ? mapStatus(c.status) : 'operational';
 }
-function effective(t: Tree, id: string): ServiceStatus {
+function effective(t: Tree, id: string, seen: Set<string> = new Set()): ServiceStatus {
+  if (seen.has(id)) return 'operational'; // cycle guard: don't re-walk a node
+  seen.add(id);
   let s = ownStatus(t, id);
-  for (const k of t.kids.get(id) ?? []) s = worst(s, effective(t, k.id));
+  for (const k of t.kids.get(id) ?? []) s = worst(s, effective(t, k.id, seen));
   return s;
 }
-function subtreeIds(t: Tree, id: string): string[] {
+function subtreeIds(t: Tree, id: string, seen: Set<string> = new Set()): string[] {
+  if (seen.has(id)) return []; // cycle guard
+  seen.add(id);
   const out = [id];
-  for (const k of t.kids.get(id) ?? []) out.push(...subtreeIds(t, k.id));
+  for (const k of t.kids.get(id) ?? []) out.push(...subtreeIds(t, k.id, seen));
   return out;
 }
 function incidentsAt(t: Tree, id: string): Incident[] {
@@ -88,8 +92,10 @@ function issueCount(t: Tree, id: string): number {
 /** root..node chain. */
 function chainTo(t: Tree, id: string): Comp[] {
   const out: Comp[] = [];
+  const seen = new Set<string>(); // cycle guard: a bad parent edge can't loop forever
   let cur: Comp | undefined = t.byId.get(id);
-  while (cur) {
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id);
     out.unshift(cur);
     cur = cur.parentId ? t.byId.get(cur.parentId) : undefined;
   }
@@ -226,6 +232,65 @@ export async function componentExists(id: string): Promise<boolean> {
   const rows = await db.select({ archivedAt: components.archivedAt }).from(components)
     .where(eq(components.id, id));
   return rows.length > 0 && rows[0].archivedAt == null;
+}
+
+/**
+ * Is this a leaf component you may declare on? Leaves are services + hosts and
+ * must not be archived. You never declare UP the tree — container (organization
+ * / product) status is derived (worst-of-subtree) and bubbles up. Every
+ * affects/declare write boundary uses this in addition to componentExists.
+ */
+export async function isLeafComponent(id: string): Promise<boolean> {
+  if (!id) return false;
+  const rows = await db.select({ kind: components.kind, archivedAt: components.archivedAt })
+    .from(components).where(eq(components.id, id));
+  const r = rows[0];
+  return !!r && r.archivedAt == null && (r.kind === 'service' || r.kind === 'host');
+}
+
+/**
+ * Ids of a component and its whole descendant subtree (children, grandchildren,
+ * …), reading non-archived rows directly. Used by the archive guard so a
+ * cascade-archive can sweep the full branch. Cycle-guarded.
+ */
+export async function descendantIds(id: string): Promise<string[]> {
+  const rows = await db.select({ id: components.id, parentId: components.parentId })
+    .from(components).where(isNull(components.archivedAt));
+  const kids = new Map<string, string[]>();
+  for (const r of rows) {
+    if (!r.parentId) continue;
+    const arr = kids.get(r.parentId) ?? [];
+    arr.push(r.id);
+    kids.set(r.parentId, arr);
+  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const walk = (cur: string) => {
+    if (seen.has(cur)) return; // cycle guard
+    seen.add(cur);
+    out.push(cur);
+    for (const k of kids.get(cur) ?? []) walk(k);
+  };
+  walk(id);
+  return out;
+}
+
+/**
+ * Archive-safety guard (C1/C2). Returns the id of the first component in the
+ * given set that has a LIVE outage — an open (non-resolved) incident referencing
+ * it, OR live observations the quorum engine has DECLARED on it — or null if the
+ * whole set is clear. Used before (cascade-)archiving so an archive can never
+ * silently hide a declared outage by dropping the node(s) out of the rendered
+ * tree.
+ */
+export async function firstLiveComponent(ids: string[]): Promise<string | null> {
+  for (const id of ids) {
+    const open = await openIncidentFor(id);
+    if (open) return id;
+    const ev = await evaluateComponent(id);
+    if (ev.state === 'declared') return id;
+  }
+  return null;
 }
 
 /**

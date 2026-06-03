@@ -5,11 +5,13 @@
  */
 import AdminShell from '@/layouts/AdminShell.astro';
 import ResourceForm from '@/components/admin/ResourceForm.astro';
-import { getComponentRow, updateComponentRow, setComponentArchived } from '@/lib/db-components';
-import { getResource } from '@/lib/admin/resources';
+import { getComponentRow, updateComponentRow, setComponentArchived, ArchiveBlockedError } from '@/lib/db-components';
+import { componentExists, descendantIds } from '@/lib/components';
+import { getResource, COMPONENT_KIND_OPTIONS } from '@/lib/admin/resources';
 import { componentParentOptions } from '@/lib/admin/view';
 import { navCounts, propertyOptions } from '@/lib/admin/nav';
 
+const KINDS = COMPONENT_KIND_OPTIONS.map((o) => o.value);
 const { id } = Astro.params;
 if (!id) return Astro.redirect('/admin/components');
 const resource = getResource('components')!;
@@ -19,22 +21,35 @@ let error = '';
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const action = form.get('_action')?.toString();
-  if (action === 'archive') { await setComponentArchived(id, true); return Astro.redirect('/admin/components'); }
-  if (action === 'unarchive') { await setComponentArchived(id, false); return Astro.redirect('/admin/components'); }
+  if (action === 'archive') {
+    try { await setComponentArchived(id, true); return Astro.redirect('/admin/components'); }
+    catch (e) { if (e instanceof ArchiveBlockedError) error = e.message; else throw e; }
+  } else if (action === 'unarchive') { await setComponentArchived(id, false); return Astro.redirect('/admin/components'); }
+  else {
   const name = form.get('name')?.toString() ?? '';
   const kind = form.get('kind')?.toString() ?? '';
+  const parentId = form.get('parentId')?.toString() || null;
   if (!name || !kind) {
     error = 'Name and kind are required.';
+  } else if (!KINDS.includes(kind)) {
+    error = `Kind must be one of: ${KINDS.join(', ')}.`;
+  } else if (parentId && parentId === id) {
+    error = 'A component cannot be its own parent.';
+  } else if (parentId && !(await componentExists(parentId))) {
+    error = `Unknown parent component "${parentId}".`;
+  } else if (parentId && (await descendantIds(id)).includes(parentId)) {
+    error = 'Cannot set a descendant as the parent (would create a cycle).';
   } else {
     await updateComponentRow(id, {
       name, kind,
-      parentId: form.get('parentId')?.toString() || null,
+      parentId,
       tag: form.get('tag')?.toString() || null,
       brand: form.get('brand')?.toString() || null,
       domain: form.get('domain')?.toString() || null,
       sortOrder: parseInt(form.get('sortOrder')?.toString() ?? '0') || 0,
     });
     return Astro.redirect('/admin/components');
+  }
   }
 }
 

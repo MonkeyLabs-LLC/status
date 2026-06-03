@@ -8,6 +8,9 @@ import type { APIRoute } from 'astro';
 import { requireAdmin, ok, err } from '@/lib/admin-api';
 import { getComponentsAdmin, getComponentRow, createComponentRow } from '@/lib/db-components';
 import { componentExists } from '@/lib/components';
+import { COMPONENT_KIND_OPTIONS } from '@/lib/admin/resources';
+
+const KINDS = COMPONENT_KIND_OPTIONS.map((o) => o.value);
 
 export const GET: APIRoute = async (ctx) => {
   const who = await requireAdmin(ctx);
@@ -22,6 +25,7 @@ export const POST: APIRoute = async (ctx) => {
   const b = await ctx.request.json().catch(() => null);
   if (!b?.id || !b?.name || !b?.kind) return err('bad_request', 'id, name and kind are required.', 400);
   if (!/^[a-z0-9-]+$/.test(b.id)) return err('bad_request', 'id must be lowercase letters, numbers and dashes.', 400);
+  if (!KINDS.includes(b.kind)) return err('bad_request', `kind must be one of: ${KINDS.join(', ')}.`, 400);
   if (await getComponentRow(b.id)) return err('conflict', `component "${b.id}" already exists.`, 409);
   if (b.parentId && !(await componentExists(b.parentId))) return err('bad_request', `Unknown parent component "${b.parentId}".`, 400);
   await createComponentRow({

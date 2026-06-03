@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { db } from '@/db';
 import { maintenance } from '@/db/schema';
 import { validateApiToken } from '@/lib/api-tokens';
+import { componentExists, isLeafComponent } from '@/lib/components';
 import { eq, asc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
@@ -29,6 +30,16 @@ export const POST: APIRoute = async ({ request }) => {
   const { title, summary, scheduled_start, scheduled_end, affects } = body;
   if (!title || !summary || !scheduled_start || !scheduled_end || !affects?.length) {
     return new Response(JSON.stringify({ error: { code: 'bad_request', message: 'title, summary, scheduled_start, scheduled_end, and affects are required.' } }), { status: 400 });
+  }
+  // Every affected id must resolve to a real LEAF component, or the window
+  // renders on no page (the invisible-maintenance bug).
+  for (const a of affects) {
+    if (!(await componentExists(a))) {
+      return new Response(JSON.stringify({ error: { code: 'bad_request', message: `Unknown component "${a}".` } }), { status: 400 });
+    }
+    if (!(await isLeafComponent(a))) {
+      return new Response(JSON.stringify({ error: { code: 'bad_request', message: `Component "${a}" is not a leaf (schedule on a service or host).` } }), { status: 400 });
+    }
   }
   const id = nanoid();
   await db.insert(maintenance).values({ id, title, summary, scheduledStart: new Date(scheduled_start), scheduledEnd: new Date(scheduled_end), affects });

@@ -17,7 +17,7 @@ import { requireAdmin, ok, err } from '@/lib/admin-api';
 import { getManualSource } from '@/lib/sources';
 import { recordManualOverride, openIncidentFor, type Level } from '@/lib/quorum';
 import { snapshotComponent, notifyForComponent } from '@/lib/notify';
-import { componentExists } from '@/lib/components';
+import { componentExists, isLeafComponent } from '@/lib/components';
 
 export const GET: APIRoute = async (ctx) => {
   const who = await requireAdmin(ctx);
@@ -33,17 +33,17 @@ export const POST: APIRoute = async (ctx) => {
   const body = await ctx.request.json().catch(() => null);
   if (!body) return err('bad_request', 'Invalid JSON body.', 400);
 
-  // Every affected id must resolve to a real component, or the incident would
-  // be invisible on the public surface (the invisible-outage bug).
+  // Every affected id must resolve to a real LEAF component (service/host), or
+  // the incident would be invisible on the public surface (the invisible-outage
+  // bug) / declared up the tree where status is derived, not observed.
   const affects: string[] = Array.isArray(body.affects)
     ? body.affects
     : (body.componentId ? [body.componentId] : []);
+  if (!affects.length) return err('bad_request', 'A componentId (affected component) is required.', 400);
   for (const a of affects) {
     if (!(await componentExists(a))) return err('bad_request', `Unknown component "${a}".`, 400);
+    if (!(await isLeafComponent(a))) return err('bad_request', `Component "${a}" is not a leaf (declare on a service or host).`, 400);
   }
-
-  const componentId: string | undefined = body.componentId ?? affects[0];
-  if (!componentId) return err('bad_request', 'A componentId (affected component) is required.', 400);
 
   // severity -> engine level. 'major' is the only major; everything else degraded.
   const level: Level = body.severity === 'major' ? 'major' : 'degraded';
@@ -51,19 +51,23 @@ export const POST: APIRoute = async (ctx) => {
   const summary: string = body.summary || body.title || 'Investigating an issue.';
 
   const manual = await getManualSource();
-  const before = await snapshotComponent(componentId);
-  // Flows through the same engine as a monitor observation (high-weight manual source).
-  await recordManualOverride({
-    manualSourceId: manual.id,
-    componentId,
-    signal,
-    level,
-    body: summary,
-    title: body.title || undefined,
-    author: who,
-  });
-  await notifyForComponent(componentId, before);
+  // Declare for EVERY validated affected component via the engine path, so a
+  // multi-component declare records all of them (not just affects[0]).
+  for (const componentId of affects) {
+    const before = await snapshotComponent(componentId);
+    // Flows through the same engine as a monitor observation (high-weight manual source).
+    await recordManualOverride({
+      manualSourceId: manual.id,
+      componentId,
+      signal,
+      level,
+      body: summary,
+      title: body.title || undefined,
+      author: who,
+    });
+    await notifyForComponent(componentId, before);
+  }
 
-  const open = await openIncidentFor(componentId);
+  const open = await openIncidentFor(affects[0]);
   return ok(open, 201);
 };

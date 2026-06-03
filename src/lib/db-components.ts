@@ -5,7 +5,23 @@
  */
 import { db } from '@/db';
 import { components } from '@/db/schema';
-import { eq, isNull, isNotNull, asc, and } from 'drizzle-orm';
+import { eq, isNull, isNotNull, asc, and, inArray } from 'drizzle-orm';
+import { descendantIds, firstLiveComponent } from './components';
+
+/**
+ * Thrown by setComponentArchived when an archive would hide a live outage
+ * (C1/C2). Callers surface this as a 409 (API) or a form error (admin page).
+ */
+export class ArchiveBlockedError extends Error {
+  constructor(public readonly componentId: string) {
+    super(
+      `Cannot archive: component "${componentId}" has a live, declared outage ` +
+      `(open incident or active observations). Resolve it first — archiving ` +
+      `would hide the outage from every status page.`,
+    );
+    this.name = 'ArchiveBlockedError';
+  }
+}
 
 export async function getComponentsAdmin(opts?: { archived?: boolean }) {
   const conds = [];
@@ -43,6 +59,23 @@ export async function updateComponentRow(id: string, patch: Record<string, unkno
   if (Object.keys(patch).length) await db.update(components).set(patch).where(eq(components.id, id));
 }
 
+/**
+ * Archive (soft-delete) or restore a component.
+ *
+ * On archive we CASCADE the whole descendant subtree (C2) so a live child can
+ * never be orphaned under a missing parent, and we first GUARD the entire set
+ * (C1/C2): if any node in the subtree has an open incident or live (declared)
+ * observations, we refuse with ArchiveBlockedError rather than silently paint a
+ * live outage green by dropping the node(s) out of the rendered tree. Restore
+ * only un-archives the single node (its descendants are restored explicitly).
+ */
 export async function setComponentArchived(id: string, archived: boolean) {
-  await db.update(components).set({ archivedAt: archived ? new Date() : null }).where(eq(components.id, id));
+  if (!archived) {
+    await db.update(components).set({ archivedAt: null }).where(eq(components.id, id));
+    return;
+  }
+  const ids = await descendantIds(id);
+  const live = await firstLiveComponent(ids);
+  if (live) throw new ArchiveBlockedError(live);
+  await db.update(components).set({ archivedAt: new Date() }).where(inArray(components.id, ids));
 }
