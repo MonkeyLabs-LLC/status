@@ -9,6 +9,7 @@
  * status palette — a property scope selector + per-resource counts.
  */
 import { NAV_RESOURCES } from '@/lib/admin/resources';
+import { COMPANY, SITE_TITLE } from '@/pulse.config';
 
 interface NavCount { [key: string]: number | undefined; }
 
@@ -30,7 +31,7 @@ const {
   adminEmail = 'admin',
   counts = {},
   property = 'all',
-  properties = [{ value: 'all', label: 'All — Monkey Labs root' }],
+  properties = [{ value: 'all', label: `All — ${COMPANY} root` }],
   primaryAction,
   secondaryAction,
 } = Astro.props;
@@ -40,7 +41,7 @@ const {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{title} — Monkey Labs Status Admin</title>
+  <title>{title} — {SITE_TITLE} Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">

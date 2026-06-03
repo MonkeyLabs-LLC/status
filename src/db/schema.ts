@@ -1,28 +1,4 @@
-import { pgTable, text, integer, timestamp, jsonb, boolean, index } from 'drizzle-orm/pg-core';
-
-export const products = pgTable('products', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  tag: text('tag'),
-  launched: boolean('launched').notNull().default(true),
-  domain: text('domain'),
-  brandColor: text('brand_color'),
-  sortOrder: integer('sort_order').notNull().default(0),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  archivedAt: timestamp('archived_at', { withTimezone: true }),
-});
-
-export const services = pgTable('services', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  product: text('product').notNull(),
-  tag: text('tag'),
-  status: text('status').notNull().default('ok'),
-  uptime90d: jsonb('uptime_90d').notNull().default('[]'),
-  sortOrder: integer('sort_order').notNull().default(0),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  archivedAt: timestamp('archived_at', { withTimezone: true }),
-});
+import { pgTable, text, integer, timestamp, jsonb, boolean, index, type AnyPgColumn } from 'drizzle-orm/pg-core';
 
 /* ──────────────────────────────────────────────────────────────
  * Components — the adjacency tree (Banana Pulse model).
@@ -36,7 +12,7 @@ export const services = pgTable('services', {
  * ────────────────────────────────────────────────────────────── */
 export const components = pgTable('components', {
   id: text('id').primaryKey(),
-  parentId: text('parent_id'),
+  parentId: text('parent_id').references((): AnyPgColumn => components.id),
   name: text('name').notNull(),
   // Structural kind for logic.
   kind: text('kind').notNull().default('service'), // organization | product | service | host
@@ -141,7 +117,7 @@ export const apiTokens = pgTable('api_tokens', {
  * DERIVED from the latest non-expired observation per source via quorum,
  * never stored. `source_target_map` is the ONLY place vendor vocabulary
  * (raw labels) touches the model — it maps a source's raw_label to a
- * component (a `services.id`, the leaf component in the existing tree).
+ * component (a `components.id`, a leaf node in the tree).
  * ────────────────────────────────────────────────────────────── */
 
 export const sources = pgTable('sources', {
@@ -163,8 +139,8 @@ export const sources = pgTable('sources', {
 export const observations = pgTable('observations', {
   id: text('id').primaryKey(),
   sourceId: text('source_id').notNull().references(() => sources.id, { onDelete: 'cascade' }),
-  // The resolved component this observation is about (a services.id).
-  componentId: text('component_id').notNull(),
+  // The resolved component this observation is about (a components.id).
+  componentId: text('component_id').notNull().references(() => components.id),
   // 'ok' | 'degraded' | 'down'.
   signal: text('signal').notNull(),
   detail: text('detail'),
@@ -182,8 +158,8 @@ export const sourceTargetMap = pgTable('source_target_map', {
   sourceId: text('source_id').notNull().references(() => sources.id, { onDelete: 'cascade' }),
   // The vendor's raw label for the target (e.g. "payments", "stripe-svc").
   rawLabel: text('raw_label').notNull(),
-  // The component (services.id) this raw label resolves to.
-  componentId: text('component_id').notNull(),
+  // The component (components.id) this raw label resolves to.
+  componentId: text('component_id').notNull().references(() => components.id),
 }, (table) => [
   index('source_target_map_lookup_idx').on(table.sourceId, table.rawLabel),
 ]);

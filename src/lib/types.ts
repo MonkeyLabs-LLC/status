@@ -1,4 +1,4 @@
-/* Status types for the MonkeyLabs status page. */
+/* Status types for the Banana Pulse status page. */
 
 export type ServiceStatus = 'operational' | 'degraded' | 'outage' | 'maintenance';
 export type DayStatus = 'ok' | 'deg' | 'out' | 'maint' | 'future';

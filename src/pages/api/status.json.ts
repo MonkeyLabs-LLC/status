@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getPublicServices } from '../../lib/db-services';
+import { getPublicLeafComponents } from '../../lib/components';
 import { getActiveIncidents } from '../../lib/db-incidents';
 import { getUpcomingMaintenance } from '../../lib/db-maintenance';
 import { worstStatus, statusToState } from '../../lib/types';
@@ -8,8 +8,9 @@ export const GET: APIRoute = async ({ locals }) => {
   const scope = (locals as any).scope as string | null;
 
   try {
-    const services = await getPublicServices({ product: scope || undefined });
-    const overall = worstStatus(services);
+    // Derive from the components tree so this AGREES with /api/v1/summary.json.
+    const services = await getPublicLeafComponents(scope || null);
+    const overall = worstStatus(services as any);
     const activeIncidents = await getActiveIncidents(scope || undefined);
     const maintenances = await getUpcomingMaintenance(scope || undefined);
 

@@ -5,6 +5,7 @@
 import { db } from '@/db';
 import { incidents, components, sources } from '@/db/schema';
 import { ne, isNull, eq, and, count } from 'drizzle-orm';
+import { COMPANY } from '@/pulse.config';
 
 export async function navCounts(): Promise<Record<string, number>> {
   const [inc] = await db.select({ v: count() }).from(incidents).where(ne(incidents.status, 'resolved'));
@@ -18,10 +19,10 @@ export async function propertyOptions(): Promise<{ value: string; label: string 
   const prods = await db.select({ id: components.id, name: components.name }).from(components)
     .where(and(eq(components.kind, 'product'), isNull(components.archivedAt)));
   return [
-    { value: 'all', label: 'All — Monkey Labs root' },
+    { value: 'all', label: `All — ${COMPANY} root` },
     ...prods.map((p) => ({ value: p.id, label: p.name })),
   ];
 }
 
 /** Static fallback used where an await is undesirable; resolved list preferred. */
-export const PROPERTIES = [{ value: 'all', label: 'All — Monkey Labs root' }];
+export const PROPERTIES = [{ value: 'all', label: `All — ${COMPANY} root` }];

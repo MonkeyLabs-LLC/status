@@ -44,12 +44,16 @@ export async function createMagicLink(email: string): Promise<string> {
 }
 
 export async function consumeMagicLink(token: string): Promise<string | null> {
-  const rows = await db.select().from(adminMagicLinks)
-    .where(and(eq(adminMagicLinks.token, token), isNull(adminMagicLinks.usedAt)));
-  const link = rows[0];
-  if (!link) return null;
-  if (link.expiresAt < new Date()) return null;
-  await db.update(adminMagicLinks).set({ usedAt: new Date() }).where(eq(adminMagicLinks.token, token));
+  // Atomic claim: one conditional UPDATE flips used_at only if still unused,
+  // so a single link can never mint two sessions even under a concurrent race.
+  const now = new Date();
+  const claimed = await db.update(adminMagicLinks)
+    .set({ usedAt: now })
+    .where(and(eq(adminMagicLinks.token, token), isNull(adminMagicLinks.usedAt)))
+    .returning({ email: adminMagicLinks.email, expiresAt: adminMagicLinks.expiresAt });
+  const link = claimed[0];
+  if (!link) return null;            // already consumed (or unknown token)
+  if (link.expiresAt < now) return null; // expired — claimed but not honored
   return link.email;
 }
 

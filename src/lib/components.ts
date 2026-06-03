@@ -9,12 +9,12 @@
  */
 import { db } from '@/db';
 import { components } from '@/db/schema';
-import { isNull, asc } from 'drizzle-orm';
+import { isNull, asc, eq } from 'drizzle-orm';
 import type { ServiceStatus, Incident } from './types';
 import { statusToState } from './types';
 import { derivedComponentStatuses } from './quorum';
 import { getActiveIncidents } from './db-incidents';
-import { rootComponentId } from '@/pulse.config';
+import { rootComponentId, UMBRELLA_ID } from '@/pulse.config';
 import type { ScopeView, ViewChild, CrumbItem } from './view';
 
 type Comp = typeof components.$inferSelect;
@@ -210,4 +210,71 @@ export async function buildSummaryTree(scope: string | null): Promise<SummaryNod
     };
   };
   return build(rootId);
+}
+
+/* ── write-boundary integrity (single-model enforcement) ─────────── */
+
+/**
+ * Does a (non-archived) component with this id exist? This is the SINGLE
+ * model: observations, incident affects[], source mappings, and component
+ * parents may only reference ids that resolve here. Enforcing it at every
+ * write boundary makes orphan references — and the resulting invisible
+ * outage — impossible. Archived components are treated as gone.
+ */
+export async function componentExists(id: string): Promise<boolean> {
+  if (!id) return false;
+  const rows = await db.select({ archivedAt: components.archivedAt }).from(components)
+    .where(eq(components.id, id));
+  return rows.length > 0 && rows[0].archivedAt == null;
+}
+
+/**
+ * Walk the component tree from a leaf up to the nearest product (or, failing
+ * that, organization) ancestor and return its id. Used to scope incidents /
+ * maintenance / notifications to a product. Falls back to UMBRELLA_ID (the
+ * seam's umbrella scope) when no product/organization ancestor is found, so
+ * nothing is ever silently mis-scoped to a hard-coded product.
+ */
+export async function productAncestorId(componentId: string): Promise<string> {
+  const rows = await db.select({ id: components.id, parentId: components.parentId, kind: components.kind })
+    .from(components).where(isNull(components.archivedAt));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  let cur = byId.get(componentId);
+  let orgFallback: string | null = null;
+  while (cur) {
+    if (cur.kind === 'product') return cur.id;
+    if (cur.kind === 'organization') orgFallback = cur.id;
+    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+  }
+  return orgFallback ?? UMBRELLA_ID;
+}
+
+/**
+ * Flat list of leaf components (services + hosts) as the public Service shape,
+ * with quorum-derived status overlaid. This is the components-native
+ * replacement for the legacy getPublicServices() so status.json AGREES with
+ * /api/v1/summary.json (both derive from the same tree + engine). Optional
+ * scope filters to a product subtree.
+ */
+export async function getPublicLeafComponents(scope: string | null): Promise<
+  { id: string; name: string; product: string; status: ServiceStatus }[]
+> {
+  const t = await loadTree();
+  const rootId = scopeRootId(scope);
+  if (!t.byId.has(rootId)) return [];
+  const ids = subtreeIds(t, rootId);
+  const out: { id: string; name: string; product: string; status: ServiceStatus }[] = [];
+  for (const id of ids) {
+    const c = t.byId.get(id)!;
+    if (c.kind !== 'service' && c.kind !== 'host') continue;
+    // Nearest product ancestor within the loaded tree (root falls back to itself).
+    let prod = rootId;
+    let cur: Comp | undefined = c;
+    while (cur) {
+      if (cur.kind === 'product') { prod = cur.id; break; }
+      cur = cur.parentId ? t.byId.get(cur.parentId) : undefined;
+    }
+    out.push({ id: c.id, name: c.name, product: prod, status: effective(t, c.id) });
+  }
+  return out;
 }

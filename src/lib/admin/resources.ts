@@ -198,28 +198,6 @@ export const RESOURCES: ResourceDecl[] = [
     actions: { create: true, edit: true, archive: true },
   },
   {
-    key: 'products',
-    label: 'Product',
-    labelPlural: 'Products',
-    icon: '◫',
-    blurb: 'Top-level groups. Issues from components bubble up to their product. Archive, never delete.',
-    listColumns: ['name', 'id', 'launched', 'brandColor'],
-    tabs: [
-      { value: 'active', label: 'Active' },
-      { value: 'archived', label: 'Archived' },
-    ],
-    fields: [
-      { name: 'id', label: 'ID', type: 'text', required: true, placeholder: 'sessions', hint: 'Stable url-safe key. Used in scoping and the public path.', createOnly: true },
-      { name: 'name', label: 'Name', type: 'text', required: true, placeholder: 'Sessions.gg' },
-      { name: 'tag', label: 'Tag', type: 'text', placeholder: 'game hosting' },
-      { name: 'launched', label: 'Launched', type: 'boolean', hint: 'Unlaunched products are hidden from the public page.' },
-      { name: 'domain', label: 'Domain', type: 'text', placeholder: 'status.sessions.gg', hint: 'Host header that lands on this product scope.' },
-      { name: 'brandColor', label: 'Brand color', type: 'color', placeholder: '#2456E8' },
-      { name: 'sortOrder', label: 'Sort', type: 'number', placeholder: '0' },
-    ],
-    actions: { create: true, edit: true, archive: true },
-  },
-  {
     key: 'subscribers',
     label: 'Subscriber',
     labelPlural: 'Subscribers',

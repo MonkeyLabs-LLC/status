@@ -1,7 +1,8 @@
 import type { APIRoute } from 'astro';
 import { getAllIncidents } from '../lib/db-incidents';
 import { SITE_TITLE, STATUS_DOMAIN } from '../pulse.config';
-import { incidentStatusLabel, severityLabel } from '../lib/types';
+import { incidentStatusLabel } from '../lib/types';
+import { severityLabel } from '../lib/skin-copy';
 import type { Incident } from '../lib/types';
 
 export const GET: APIRoute = async ({ locals }) => {

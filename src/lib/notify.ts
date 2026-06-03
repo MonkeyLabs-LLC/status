@@ -27,9 +27,10 @@
  * are intentional one-shots.
  */
 import { db } from '@/db';
-import { incidents, incidentTimeline, services, subscribers } from '@/db/schema';
-import { eq, ne, desc, and, sql } from 'drizzle-orm';
+import { incidents, incidentTimeline, components, subscribers } from '@/db/schema';
+import { eq, ne, desc, and, isNull, sql } from 'drizzle-orm';
 import { sendIncidentEmail } from './email';
+import { UMBRELLA_ID, COMPANY, STATUS_DOMAIN } from '@/pulse.config';
 
 /** What kind of lifecycle event we are narrating to subscribers. */
 export type NotifyKind = 'opened' | 'update' | 'resolved';
@@ -183,20 +184,34 @@ async function latestUpdateBody(incidentId: string): Promise<string | null> {
   return rows[0]?.body ?? null;
 }
 
-/** Resolve a human scope label from the first affected component's product. */
+/**
+ * Resolve a human scope label by walking the first affected component up the
+ * components tree to its nearest product (else organization) ancestor — the
+ * SAME single model the public surface uses. Falls back to the umbrella scope,
+ * never a hard-coded product.
+ */
 async function resolveScopeName(affects: string[]): Promise<string> {
-  if (!affects || affects.length === 0) return 'Monkey Labs';
-  const rows = await db.select({ product: services.product, name: services.name })
-    .from(services).where(eq(services.id, affects[0])).limit(1);
-  const product = rows[0]?.product;
-  if (!product) return 'Monkey Labs';
+  if (!affects || affects.length === 0) return COMPANY;
+  const rows = await db.select({ id: components.id, parentId: components.parentId, kind: components.kind })
+    .from(components).where(isNull(components.archivedAt));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  let cur = byId.get(affects[0]);
+  let product: string | null = null;
+  let orgFallback: string | null = null;
+  while (cur) {
+    if (cur.kind === 'product') { product = cur.id; break; }
+    if (cur.kind === 'organization') orgFallback = cur.id;
+    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+  }
+  const key = product ?? orgFallback ?? UMBRELLA_ID;
+  if (key === UMBRELLA_ID) return COMPANY;
   // Title-case a product key for chrome (e.g. 'sessions' -> 'Sessions').
-  return product.charAt(0).toUpperCase() + product.slice(1);
+  return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
 /** Public incident permalink, scoped to the status site. */
 function incidentUrl(id: string): string {
-  const base = process.env.PUBLIC_STATUS_URL || 'https://status.monkeylabs.gg';
+  const base = process.env.PUBLIC_STATUS_URL || `https://${STATUS_DOMAIN}`;
   return `${base.replace(/\/$/, '')}/incidents/${id}`;
 }
 

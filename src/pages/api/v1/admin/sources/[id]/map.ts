@@ -10,6 +10,7 @@ import { sourceTargetMap } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { requireAdmin, ok, err } from '@/lib/admin-api';
 import { mapTarget } from '@/lib/sources';
+import { componentExists } from '@/lib/components';
 
 export const GET: APIRoute = async (ctx) => {
   const who = await requireAdmin(ctx);
@@ -23,6 +24,7 @@ export const POST: APIRoute = async (ctx) => {
   if (who instanceof Response) return who;
   const b = await ctx.request.json().catch(() => null);
   if (!b?.rawLabel || !b?.componentId) return err('bad_request', 'rawLabel and componentId are required.', 400);
+  if (!(await componentExists(b.componentId))) return err('bad_request', `Unknown component "${b.componentId}".`, 400);
   const id = await mapTarget(ctx.params.id!, b.rawLabel, b.componentId);
   return ok({ id }, 201);
 };

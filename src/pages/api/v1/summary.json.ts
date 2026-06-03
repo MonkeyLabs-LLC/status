@@ -27,6 +27,22 @@ function body(scope: string | null, tree: unknown, status: 'operational' | 'degr
   }, null, 2);
 }
 
+/**
+ * Dead-man discipline: on a DB/derivation error we must NEVER synthesize
+ * 'operational'. Report 'unknown' + live:false so the marketing "● Live now"
+ * badge fails CLOSED rather than claiming health we can no longer verify.
+ */
+function unknownBody(scope: string | null) {
+  return JSON.stringify({
+    scope,
+    status: 'unknown',
+    state: 'unknown',
+    live: false,
+    tree: null,
+    generatedAt: new Date().toISOString(),
+  }, null, 2);
+}
+
 export const GET: APIRoute = async ({ locals, url }) => {
   const qScope = url.searchParams.get('scope');
   const scope = qScope || ((locals as any).scope as string | null) || null;
@@ -35,6 +51,9 @@ export const GET: APIRoute = async ({ locals, url }) => {
     if (!root) return new Response(body(scope, null, 'operational'), { status: 200, headers });
     return new Response(body(scope, root, root.status), { status: 200, headers });
   } catch (_e) {
-    return new Response(body(scope, null, 'operational'), { status: 200, headers });
+    // DB/derivation failure: fail CLOSED. Never claim 'operational' on error —
+    // emit 'unknown' + live:false with a 503 so callers (and the "● Live now"
+    // badge) treat us as unverifiable, mirroring the engine's dead-man rule.
+    return new Response(unknownBody(scope), { status: 503, headers });
   }
 };

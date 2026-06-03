@@ -4,9 +4,10 @@
  * from types.ts so existing components work unchanged.
  */
 import { db } from '@/db';
-import { incidents, incidentTimeline, services } from '@/db/schema';
-import { eq, ne, desc, and, arrayContains, inArray } from 'drizzle-orm';
+import { incidents, incidentTimeline, components } from '@/db/schema';
+import { eq, ne, desc, isNull } from 'drizzle-orm';
 import type { Incident, TimelineEntry, IncidentSeverity, IncidentStatus } from './types';
+import { UMBRELLA_ID } from '@/pulse.config';
 
 /* ── helpers ────────────────────────────────────────────────── */
 
@@ -25,14 +26,34 @@ function mapDbIncident(row: typeof incidents.$inferSelect, timeline: TimelineEnt
   };
 }
 
-/** Resolve the product for an incident by looking at the first affected service. */
+/**
+ * Load the (active) component tree once as a parent lookup. Shared by the
+ * product-scoping helpers below so incidents derive their product/brand from
+ * the SAME components tree the public surface renders (no parallel model).
+ */
+async function loadComponentTree() {
+  const rows = await db.select({ id: components.id, parentId: components.parentId, kind: components.kind })
+    .from(components).where(isNull(components.archivedAt));
+  return new Map(rows.map((r) => [r.id, r]));
+}
+
+/** Walk a component up to its nearest product/organization ancestor id. */
+function ancestorProduct(byId: Map<string, { id: string; parentId: string | null; kind: string }>, id: string): string {
+  let cur = byId.get(id);
+  let orgFallback: string | null = null;
+  while (cur) {
+    if (cur.kind === 'product') return cur.id;
+    if (cur.kind === 'organization') orgFallback = cur.id;
+    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+  }
+  return orgFallback ?? UMBRELLA_ID;
+}
+
+/** Resolve the product for an incident by walking the first affected component up the tree. */
 async function resolveProduct(affects: string[]): Promise<string> {
-  if (affects.length === 0) return 'sessions';
-  const rows = await db.select({ product: services.product })
-    .from(services)
-    .where(inArray(services.id, affects))
-    .limit(1);
-  return rows[0]?.product ?? 'sessions';
+  if (affects.length === 0) return UMBRELLA_ID;
+  const byId = await loadComponentTree();
+  return ancestorProduct(byId, affects[0]);
 }
 
 /** Build timeline entries for an incident. */
@@ -47,12 +68,18 @@ async function buildTimeline(incidentId: string): Promise<TimelineEntry[]> {
   }));
 }
 
-/** Filter incidents by product via their affects → service product mapping. */
+/** All component ids in a product's subtree (the product node + every descendant). */
 async function serviceIdsForProduct(product: string): Promise<string[]> {
-  const rows = await db.select({ id: services.id })
-    .from(services)
-    .where(eq(services.product, product));
-  return rows.map(r => r.id);
+  const byId = await loadComponentTree();
+  const kids = new Map<string, string[]>();
+  for (const r of byId.values()) {
+    if (!r.parentId) continue;
+    (kids.get(r.parentId) ?? kids.set(r.parentId, []).get(r.parentId)!).push(r.id);
+  }
+  const out: string[] = [];
+  const walk = (id: string) => { out.push(id); for (const k of kids.get(id) ?? []) walk(k); };
+  if (byId.has(product)) walk(product);
+  return out;
 }
 
 function affectsProduct(affects: string[], productServiceIds: string[]): boolean {

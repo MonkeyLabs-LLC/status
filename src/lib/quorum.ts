@@ -21,8 +21,8 @@
  * status text. A manual override is just a high-weight `manual` source
  * observation flowing through this same engine.
  *
- * Reuses: the existing `incidents` / `incident_timeline` / `services` tables
- * (a component id IS a services.id leaf), nanoid ids, and the incident
+ * Reuses: the existing `incidents` / `incident_timeline` / `components` tables
+ * (a component id IS a components.id leaf), nanoid ids, and the incident
  * severity/status vocabulary from types.ts.
  */
 import { db } from '@/db';
@@ -299,8 +299,8 @@ export function evaluationToStatus(ev: ComponentEvaluation): DerivedStatus {
 /**
  * Derived status for every component that has core observations, as a map of
  * component_id -> status. Components with no observations are absent (callers
- * fall back to the stored services.status for those, preserving existing
- * behavior for services not yet wired to the engine).
+ * fall back to the stored components.status for those, preserving existing
+ * behavior for components not yet wired to the engine).
  */
 export async function derivedComponentStatuses(now = new Date()): Promise<Record<string, { status: DerivedStatus; state: QuorumState; reducedCoverage: boolean }>> {
   const rows = await db.execute<{ component_id: string }>(sql`
@@ -372,6 +372,7 @@ export async function recordManualOverride(opts: {
   signal: Signal;
   level?: Level;            // explicit level for the incident when opening
   body?: string;            // human update text
+  title?: string;           // human title; overwrites the engine's templated headline
   author: string;
   now?: Date;
 }): Promise<void> {
@@ -421,9 +422,17 @@ export async function recordManualOverride(opts: {
       body: opts.body ?? `${name} is being investigated.`, author: opts.author,
     });
   } else {
-    await db.update(incidents)
-      .set({ severity, auto: false })
-      .where(eq(incidents.id, open.id));
+    // An incident is already open — typically the engine auto-created one the
+    // instant the manual observation reached quorum, with a TEMPLATED summary
+    // (and generic title). Promote the operator to owner AND make their words
+    // the headline: overwrite summary with opts.body (and title when supplied),
+    // so the page shows what the human wrote, not the template.
+    const patch: { severity: typeof severity; auto: boolean; summary?: string; title?: string } = {
+      severity, auto: false,
+    };
+    if (opts.body) patch.summary = opts.body;
+    if (opts.title) patch.title = opts.title;
+    await db.update(incidents).set(patch).where(eq(incidents.id, open.id));
     if (opts.body) {
       await db.insert(incidentTimeline).values({
         id: nanoid(), incidentId: open.id, at: now, label: open.status.toUpperCase(),

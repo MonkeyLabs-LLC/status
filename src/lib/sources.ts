@@ -14,6 +14,7 @@ import { sources, sourceTargetMap } from '@/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { hashToken, generateToken } from './api-tokens';
+import { componentExists } from './components';
 
 export type SourceKind = 'push' | 'probe' | 'heartbeat' | 'manual';
 
@@ -62,12 +63,20 @@ export async function revokeSource(id: string) {
 export async function resolveTarget(sourceId: string, rawLabel: string): Promise<string | null> {
   const rows = await db.select().from(sourceTargetMap)
     .where(and(eq(sourceTargetMap.sourceId, sourceId), eq(sourceTargetMap.rawLabel, rawLabel)));
-  if (rows[0]) return rows[0].componentId;
+  const componentId = rows[0]?.componentId;
+  // Single-model guard: a mapping may exist but point at a component that no
+  // longer exists (or was archived) — never resolve to a non-existent id, or
+  // an observation/incident would land on a target the public surface can't
+  // see (the invisible-outage bug).
+  if (componentId && (await componentExists(componentId))) return componentId;
   return null;
 }
 
 /** Add a raw_label → component mapping for a source. */
 export async function mapTarget(sourceId: string, rawLabel: string, componentId: string) {
+  if (!(await componentExists(componentId))) {
+    throw new Error(`Unknown component "${componentId}".`);
+  }
   const id = nanoid();
   await db.insert(sourceTargetMap).values({ id, sourceId, rawLabel, componentId });
   return id;

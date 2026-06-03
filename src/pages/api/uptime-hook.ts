@@ -14,7 +14,7 @@
  */
 import type { APIRoute } from 'astro';
 import { db } from '@/db';
-import { services } from '@/db/schema';
+import { components } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { timingSafeEqual } from 'node:crypto';
 import { getOrCreateAdapterSource } from '@/lib/sources';
@@ -50,11 +50,11 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(JSON.stringify({ error: { code: 'bad_request', message: `status must be one of: ${Object.keys(SIGNAL_MAP).join(', ')}` } }), { status: 400 });
     }
 
-    // Confirm the service (= component) exists.
-    const rows = await db.select().from(services).where(eq(services.id, service_id));
+    // Confirm the component exists (single model — no orphan targets).
+    const rows = await db.select().from(components).where(eq(components.id, service_id));
     const svc = rows[0];
-    if (!svc) {
-      return new Response(JSON.stringify({ error: { code: 'not_found', message: 'Service not found.' } }), { status: 404 });
+    if (!svc || svc.archivedAt != null) {
+      return new Response(JSON.stringify({ error: { code: 'not_found', message: 'Component not found.' } }), { status: 404 });
     }
 
     // Always keep the 90-day uptime bar (legacy behavior the public page reads).
@@ -66,7 +66,7 @@ export const POST: APIRoute = async ({ request }) => {
     } else {
       uptime.push({ date: today, status: newStatus });
     }
-    await db.update(services).set({ uptime90d: uptime.slice(-90) }).where(eq(services.id, service_id));
+    await db.update(components).set({ uptime90d: uptime.slice(-90) }).where(eq(components.id, service_id));
 
     // Route real signals (ok/deg/out) through the core engine as an observation.
     if (mapped !== 'maint') {

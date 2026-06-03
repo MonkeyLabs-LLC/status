@@ -6,7 +6,7 @@
  */
 import AdminShell from '@/layouts/AdminShell.astro';
 import { db } from '@/db';
-import { incidents, services, observations, sources } from '@/db/schema';
+import { incidents, components, observations, sources } from '@/db/schema';
 import { ne, desc, sql } from 'drizzle-orm';
 import { pillHtml, fmtDateTime, evaluateAll } from '@/lib/admin/view';
 import { navCounts, propertyOptions } from '@/lib/admin/nav';
@@ -24,7 +24,7 @@ const stale = evals.filter((e) => e.reducedCoverage);
 const activeIncidents = await db.select().from(incidents).where(ne(incidents.status, 'resolved')).orderBy(desc(incidents.startedAt)).limit(20);
 
 // Map componentId -> name for readable rows.
-const allSvc = await db.select({ id: services.id, name: services.name }).from(services);
+const allSvc = await db.select({ id: components.id, name: components.name }).from(components);
 const nameOf = (id: string) => allSvc.find((s) => s.id === id)?.name ?? id;
 
 // Recent observations (last 10) joined with source name.

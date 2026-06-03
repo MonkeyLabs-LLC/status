@@ -9,12 +9,10 @@
  */
 import AdminShell from '@/layouts/AdminShell.astro';
 import ResourceForm from '@/components/admin/ResourceForm.astro';
-import { db } from '@/db';
-import { incidents } from '@/db/schema';
-import { eq } from 'drizzle-orm';
 import { getResource } from '@/lib/admin/resources';
 import { getManualSource } from '@/lib/sources';
 import { recordManualOverride, openIncidentFor, type Level } from '@/lib/quorum';
+import { componentExists } from '@/lib/components';
 import { componentOptions } from '@/lib/admin/view';
 import { navCounts, propertyOptions } from '@/lib/admin/nav';
 
@@ -29,25 +27,30 @@ if (Astro.request.method === 'POST') {
   const severity = form.get('severity')?.toString() ?? 'major';
   const affects = form.getAll('affects').map((a) => a.toString()).filter(Boolean);
 
+  let unknown = '';
+  for (const a of affects) {
+    if (!(await componentExists(a))) { unknown = a; break; }
+  }
+
   if (!title || !summary || affects.length === 0) {
     error = 'Title, customer message, and at least one affected component are required.';
+  } else if (unknown) {
+    error = `Unknown component "${unknown}".`;
   } else {
     const level: Level = severity === 'major' ? 'major' : 'degraded';
     const manual = await getManualSource();
     // Declare for each affected component via the engine path.
+    // Pass the human title/body straight through; recordManualOverride makes
+    // them the headline even when the engine already opened a templated incident.
     for (const componentId of affects) {
       await recordManualOverride({
         manualSourceId: manual.id, componentId,
         signal: level === 'major' ? 'down' : 'degraded',
-        level, body: summary, author: who,
+        level, body: summary, title, author: who,
       });
     }
-    // Title the opened incident as the human wrote it (engine titled it generically).
     const open = await openIncidentFor(affects[0]);
-    if (open) {
-      await db.update(incidents).set({ title }).where(eq(incidents.id, open.id));
-      return Astro.redirect(`/admin/incidents/${open.id}`);
-    }
+    if (open) return Astro.redirect(`/admin/incidents/${open.id}`);
     return Astro.redirect('/admin/incidents');
   }
 }

@@ -17,6 +17,7 @@ import { requireAdmin, ok, err } from '@/lib/admin-api';
 import { getManualSource } from '@/lib/sources';
 import { recordManualOverride, openIncidentFor, type Level } from '@/lib/quorum';
 import { snapshotComponent, notifyForComponent } from '@/lib/notify';
+import { componentExists } from '@/lib/components';
 
 export const GET: APIRoute = async (ctx) => {
   const who = await requireAdmin(ctx);
@@ -32,7 +33,16 @@ export const POST: APIRoute = async (ctx) => {
   const body = await ctx.request.json().catch(() => null);
   if (!body) return err('bad_request', 'Invalid JSON body.', 400);
 
-  const componentId: string | undefined = body.componentId ?? (Array.isArray(body.affects) ? body.affects[0] : undefined);
+  // Every affected id must resolve to a real component, or the incident would
+  // be invisible on the public surface (the invisible-outage bug).
+  const affects: string[] = Array.isArray(body.affects)
+    ? body.affects
+    : (body.componentId ? [body.componentId] : []);
+  for (const a of affects) {
+    if (!(await componentExists(a))) return err('bad_request', `Unknown component "${a}".`, 400);
+  }
+
+  const componentId: string | undefined = body.componentId ?? affects[0];
   if (!componentId) return err('bad_request', 'A componentId (affected component) is required.', 400);
 
   // severity -> engine level. 'major' is the only major; everything else degraded.
@@ -49,6 +59,7 @@ export const POST: APIRoute = async (ctx) => {
     signal,
     level,
     body: summary,
+    title: body.title || undefined,
     author: who,
   });
   await notifyForComponent(componentId, before);
