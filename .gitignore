@@ -30,3 +30,8 @@ bun.lock
 bun.lockb
 yarn.lock
 pnpm-lock.yaml
+
+# dev scratch / local demos (not shipped)
+/*.mjs
+!astro.config.mjs
+/demo-shots/

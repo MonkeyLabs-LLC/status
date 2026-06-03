@@ -2,11 +2,23 @@ import { defineMiddleware } from 'astro:middleware';
 import { resolveScope } from './lib/scope';
 import { verifyCookie, COOKIE_NAME } from './lib/admin-auth';
 
-const PASSTHROUGH = new Set(['/feed.xml', '/api/status.json', '/api/subscribe', '/history']);
-
-export const onRequest = defineMiddleware(async ({ request, locals, url, cookies, redirect, rewrite }, next) => {
+export const onRequest = defineMiddleware(async ({ request, locals, url, cookies, redirect }, next) => {
   const host = request.headers.get('host') || 'localhost';
-  const scope = resolveScope(host);
+  let scope = resolveScope(host);
+
+  // DEV-ONLY: preview any brand locally via ?scope=sessions|bananalabs|monkeylabs
+  // (real deploys pick the brand from the Host header). Persisted in a cookie so
+  // it survives the internal rewrite that re-runs this middleware. import.meta.env
+  // .DEV is false in production builds, so this is dead code there.
+  if (import.meta.env.DEV) {
+    const s = url.searchParams.get('scope');
+    if (s === 'monkeylabs') cookies.delete('__scope', { path: '/' });
+    else if (s) cookies.set('__scope', s, { path: '/', httpOnly: false });
+    const ov = s ?? cookies.get('__scope')?.value ?? null;
+    if (ov === 'sessions' || ov === 'bananalabs') scope = ov;
+    else if (ov === 'monkeylabs') scope = null;
+  }
+
   (locals as any).scope = scope;
 
   const path = url.pathname;
@@ -40,19 +52,7 @@ export const onRequest = defineMiddleware(async ({ request, locals, url, cookies
     return next();
   }
 
-  if (!scope) return next();
-
-  // Passthrough special paths and static assets
-  if (PASSTHROUGH.has(path) || path.startsWith('/_astro/') || path.startsWith('/api/')) {
-    return next();
-  }
-
-  // Already rewritten — path starts with /scope, don't rewrite again
-  if (path.startsWith(`/${scope}`)) {
-    return next();
-  }
-
-  // Rewrite: / → /sessions, /incidents → /sessions/incidents, etc.
-  const target = path === '/' ? `/${scope}` : `/${scope}${path}`;
-  return rewrite(target);
+  // Node routing is relative to the scope's landing root (resolved in
+  // lib/components from locals.scope), so no host-based path rewrite is needed.
+  return next();
 });

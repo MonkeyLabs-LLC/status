@@ -2,6 +2,7 @@ import { db } from '@/db';
 import { services } from '@/db/schema';
 import { eq, isNull, isNotNull, asc, and } from 'drizzle-orm';
 import type { Service, ServiceStatus, DayStatus } from './types';
+import { derivedComponentStatuses } from './quorum';
 
 /* ── status mapping (DB short codes → public types) ────────── */
 
@@ -45,6 +46,25 @@ export async function getService(id: string) {
 
 /* ── mapped queries (used by public pages) ─────────────────── */
 
+/**
+ * Overlay the quorum engine's DERIVED status onto stored service rows. The
+ * engine never writes services.status (status is derived from observations);
+ * the public pages must reflect it so the page is truthful during an outage
+ * with the admin untouched. Services with no engine observations keep their
+ * stored status. Mirrors the same overlay summary.json applies.
+ */
+async function overlayDerived(list: Service[]): Promise<Service[]> {
+  if (list.length === 0) return list;
+  const derived = await derivedComponentStatuses();
+  return list.map((s) => {
+    const d = derived[s.id];
+    if (!d) return s;
+    const status: ServiceStatus =
+      d.status === 'outage' ? 'outage' : d.status === 'degraded' ? 'degraded' : 'operational';
+    return { ...s, status };
+  });
+}
+
 export async function getPublicServices(opts?: { product?: string }): Promise<Service[]> {
   const conditions = [isNull(services.archivedAt)];
   if (opts?.product) conditions.push(eq(services.product, opts.product));
@@ -52,11 +72,12 @@ export async function getPublicServices(opts?: { product?: string }): Promise<Se
   const rows = await db.select().from(services)
     .where(and(...conditions))
     .orderBy(asc(services.sortOrder));
-  return rows.map(mapDbService);
+  return overlayDerived(rows.map(mapDbService));
 }
 
 export async function getPublicService(id: string): Promise<Service | undefined> {
   const rows = await db.select().from(services).where(eq(services.id, id));
   const row = rows[0];
-  return row ? mapDbService(row) : undefined;
+  if (!row) return undefined;
+  return (await overlayDerived([mapDbService(row)]))[0];
 }

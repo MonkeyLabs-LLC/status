@@ -27,6 +27,8 @@ export interface Incident {
   status: IncidentStatus;
   product: string;
   affects?: string[]; // service IDs affected by this incident
+  /** true = engine-opened (detected automatically); false = human-declared. */
+  auto?: boolean;
   started: string;   // ISO 8601
   resolved?: string; // ISO 8601
   timeline: TimelineEntry[];

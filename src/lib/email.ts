@@ -11,11 +11,11 @@ function magicLinkHtml(magicUrl: string): string {
   <tr><td align="center" style="padding:48px 16px 0;vertical-align:top;">
     <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;">
       <tr><td style="padding-bottom:24px;">
-        <span style="font-family:'DM Mono','JetBrains Mono',monospace;font-size:13px;font-weight:500;color:#847a67;letter-spacing:.04em;text-transform:lowercase;">monkeylabs status</span>
+        <span style="font-family:'DM Mono','JetBrains Mono',monospace;font-size:13px;font-weight:500;color:#847a67;letter-spacing:.04em;text-transform:lowercase;">Monkey Labs status</span>
       </td></tr>
       <tr><td style="background:#221f1b;border:1px solid #2e2924;border-radius:4px;padding:28px 28px 24px;">
         <h1 style="margin:0 0 6px;font-family:'DM Sans',system-ui,sans-serif;font-size:20px;font-weight:600;color:#f0e8d4;letter-spacing:-.01em;">Your admin login link</h1>
-        <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#aca28c;">Sign in to the MonkeyLabs Status admin. This link expires in 15 minutes.</p>
+        <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#aca28c;">Sign in to the Monkey Labs Status admin. This link expires in 15 minutes.</p>
         <table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px 0 4px;"><tr><td>
           <a href="${magicUrl}" style="display:inline-block;padding:10px 24px;background:rgba(34,197,94,.10);color:#22c55e;font-size:13px;font-weight:600;text-decoration:none;border-radius:3px;border:1px solid rgba(34,197,94,.30);font-family:'DM Mono','JetBrains Mono',monospace;letter-spacing:.02em;">sign in &rarr;</a>
         </td></tr></table>
@@ -39,7 +39,7 @@ export async function sendMagicLinkEmail(to: string, magicUrl: string) {
   if (!apiKey) throw new Error('RESEND_API_KEY not set');
 
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'status@monkeylabs.gg';
-  const fromName = process.env.RESEND_FROM_NAME ?? 'MonkeyLabs Status';
+  const fromName = process.env.RESEND_FROM_NAME ?? 'Monkey Labs Status';
 
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -51,8 +51,41 @@ export async function sendMagicLinkEmail(to: string, magicUrl: string) {
       from: `${fromName} <${fromEmail}>`,
       to: [to],
       subject: 'Your admin login link',
-      text: `Sign in to MonkeyLabs Status:\n\n${magicUrl}\n\nThis link expires in 15 minutes. If you didn't request this, ignore this email.`,
+      text: `Sign in to Monkey Labs Status:\n\n${magicUrl}\n\nThis link expires in 15 minutes. If you didn't request this, ignore this email.`,
       html: magicLinkHtml(magicUrl),
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Resend send failed: ${res.status} ${body}`);
+  }
+}
+
+/**
+ * Generic transactional send via Resend, used by the incident notification
+ * fan-out (notify.ts). Same sender identity and API as the magic-link sender;
+ * caller supplies the rendered subject/text/html.
+ */
+export async function sendIncidentEmail(to: string, subject: string, text: string, html: string) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error('RESEND_API_KEY not set');
+
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'status@monkeylabs.gg';
+  const fromName = process.env.RESEND_FROM_NAME ?? 'Monkey Labs Status';
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: `${fromName} <${fromEmail}>`,
+      to: [to],
+      subject,
+      text,
+      html,
     }),
   });
 

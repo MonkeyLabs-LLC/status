@@ -18,6 +18,7 @@ function mapDbIncident(row: typeof incidents.$inferSelect, timeline: TimelineEnt
     status: row.status as IncidentStatus,
     product,
     affects: row.affects,
+    auto: row.auto,
     started: row.startedAt.toISOString(),
     resolved: row.resolvedAt?.toISOString(),
     timeline,

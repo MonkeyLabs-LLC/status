@@ -1,53 +1,60 @@
 ---
-import Admin from '@/layouts/Admin.astro';
+/**
+ * Incidents list — active / scheduled (maintenance) / resolved tabs.
+ * Generic list rendering via the incidents resource declaration.
+ */
+import AdminShell from '@/layouts/AdminShell.astro';
+import ResourceList from '@/components/admin/ResourceList.astro';
 import { db } from '@/db';
-import { incidents } from '@/db/schema';
-import { eq, ne, desc } from 'drizzle-orm';
-import EmptyState from '@/components/EmptyState.astro';
+import { incidents, maintenance } from '@/db/schema';
+import { eq, ne, desc, asc, gte } from 'drizzle-orm';
+import { getResource } from '@/lib/admin/resources';
+import { navCounts, propertyOptions } from '@/lib/admin/nav';
+import { fmtDateTime } from '@/lib/admin/view';
 
-const filter = Astro.url.searchParams.get('filter') ?? 'active';
-const condition = filter === 'resolved' ? eq(incidents.status, 'resolved') : ne(incidents.status, 'resolved');
-const rows = await db.select().from(incidents).where(condition).orderBy(desc(incidents.startedAt)).limit(50);
+const resource = getResource('incidents')!;
+const adminEmail = (Astro.locals as App.Locals).adminEmail ?? 'admin';
+const property = Astro.url.searchParams.get('property') ?? 'all';
+const tab = Astro.url.searchParams.get('tab') ?? 'active';
 
-function formatDate(d: Date): string {
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+let rows: Record<string, any>[] = [];
+let isMaintenance = false;
+if (tab === 'resolved') {
+  rows = await db.select().from(incidents).where(eq(incidents.status, 'resolved')).orderBy(desc(incidents.startedAt)).limit(100);
+} else if (tab === 'scheduled') {
+  isMaintenance = true;
+  rows = await db.select().from(maintenance).where(gte(maintenance.scheduledEnd, new Date())).orderBy(asc(maintenance.scheduledStart));
+} else {
+  rows = await db.select().from(incidents).where(ne(incidents.status, 'resolved')).orderBy(desc(incidents.startedAt)).limit(100);
 }
+
+const counts = await navCounts();
+const properties = await propertyOptions();
+const maintResource = getResource('maintenance')!;
 ---
-<Admin title="Incidents">
-  <div class="admin-header">
-    <h1>Incidents</h1>
-    <a href="/admin/incidents/new" class="btn btn-primary">Declare incident</a>
+<AdminShell title="Incidents" active="incidents" adminEmail={adminEmail} counts={counts} property={property} properties={properties}
+  primaryAction={{ href: '/admin/incidents/new', label: '+ Declare incident', variant: 'neutral' }}
+  secondaryAction={{ href: '/admin/maintenance/new', label: '+ Maintenance' }}>
+
+  <p class="note" style="margin-bottom:16px">{resource.blurb}</p>
+
+  <div class="tabs">
+    {resource.tabs!.map((t) => (
+      <a class:list={[{ on: t.value === tab }]} href={`/admin/incidents?tab=${t.value}`}>{t.label}</a>
+    ))}
   </div>
 
-  <div style="display:flex;gap:6px;margin-bottom:1.5em;">
-    <a href="/admin/incidents?filter=active" class:list={['btn', filter === 'active' ? 'btn-primary' : 'btn-secondary']} style="padding:6px 12px;font-size:12px;">Active</a>
-    <a href="/admin/incidents?filter=resolved" class:list={['btn', filter === 'resolved' ? 'btn-primary' : 'btn-secondary']} style="padding:6px 12px;font-size:12px;">Resolved</a>
-  </div>
-
-  {rows.length > 0 ? (
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Title</th>
-          <th>Severity</th>
-          <th>Status</th>
-          <th>Started</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map(inc => (
-          <tr>
-            <td style="font-weight:600;">{inc.title}</td>
-            <td><span class:list={['tag', inc.severity === 'major' ? 'tag-bad' : inc.severity === 'moderate' ? 'tag-warn' : '']}>{inc.severity.toUpperCase()}</span></td>
-            <td style="font-family:var(--mono);font-size:11px;text-transform:uppercase;">{inc.status}</td>
-            <td style="font-family:var(--mono);font-size:12px;color:var(--dim);">{formatDate(inc.startedAt)}</td>
-            <td><a href={`/admin/incidents/${inc.id}`} style="font-family:var(--mono);font-size:12px;">manage →</a></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+  {isMaintenance ? (
+    <ResourceList resource={maintResource} rows={rows}
+      hrefFor={(r) => `/admin/maintenance/${r.id}`}
+      cellOverrides={Object.fromEntries(rows.flatMap((r) => [
+        [`${r.id}|scheduledStart`, `<span class="muted">${fmtDateTime(r.scheduledStart)}</span>`],
+        [`${r.id}|scheduledEnd`, `<span class="muted">${fmtDateTime(r.scheduledEnd)}</span>`],
+      ]))}
+      emptyText="No scheduled maintenance." />
   ) : (
-    <EmptyState glyph="▲" title={filter === 'resolved' ? 'No resolved incidents' : 'No active incidents'} subtitle="Everything is running smoothly." />
+    <ResourceList resource={resource} rows={rows}
+      hrefFor={(r) => `/admin/incidents/${r.id}`}
+      emptyText={tab === 'resolved' ? 'No resolved incidents.' : 'No active incidents — the engine sees everything operational.'} />
   )}
-</Admin>
+</AdminShell>

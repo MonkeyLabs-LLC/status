@@ -24,6 +24,39 @@ export const services = pgTable('services', {
   archivedAt: timestamp('archived_at', { withTimezone: true }),
 });
 
+/* ──────────────────────────────────────────────────────────────
+ * Components — the adjacency tree (Banana Pulse model).
+ *
+ * A single arbitrary-depth tree (`parent_id`) of organization → product →
+ * service → host. Replaces the flat products/services split for the public
+ * surface and the engine. A component id is what observations, incidents
+ * (affects[]), and source_target_map reference. Current status is DERIVED
+ * (quorum overlays the stored `status` fallback); a parent's effective status
+ * bubbles up = worst of its subtree. Brand/domain live on product nodes.
+ * ────────────────────────────────────────────────────────────── */
+export const components = pgTable('components', {
+  id: text('id').primaryKey(),
+  parentId: text('parent_id'),
+  name: text('name').notNull(),
+  // Structural kind for logic.
+  kind: text('kind').notNull().default('service'), // organization | product | service | host
+  // Descriptive display label (e.g. 'repo · runtime', 'Stripe', 'host').
+  tag: text('tag'),
+  // Stored fallback status; quorum-derived status overlays where observed.
+  status: text('status').notNull().default('ok'),
+  uptime90d: jsonb('uptime_90d').notNull().default('[]'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  // Product/scope-only: which brand skin + which host lands here.
+  brand: text('brand'),
+  domain: text('domain'),
+  launched: boolean('launched').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+}, (table) => [
+  index('components_parent_idx').on(table.parentId),
+  index('components_kind_idx').on(table.kind),
+]);
+
 export const incidents = pgTable('incidents', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
@@ -31,6 +64,8 @@ export const incidents = pgTable('incidents', {
   status: text('status').notNull(),
   severity: text('severity').notNull(),
   affects: text('affects').array().notNull(),
+  // Engine ownership: true = opened by the quorum engine, false = human-declared/overridden.
+  auto: boolean('auto').notNull().default(false),
   startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -45,6 +80,8 @@ export const incidentTimeline = pgTable('incident_timeline', {
   at: timestamp('at', { withTimezone: true }).notNull(),
   label: text('label').notNull(),
   body: text('body').notNull(),
+  // Who wrote this update: 'engine' for templated auto-updates, otherwise an admin email.
+  author: text('author').notNull().default('engine'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index('incident_timeline_incident_at_idx').on(table.incidentId, table.at),
@@ -93,4 +130,60 @@ export const apiTokens = pgTable('api_tokens', {
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
 }, (table) => [
   index('api_tokens_hash_active_idx').on(table.tokenHash),
+]);
+
+/* ──────────────────────────────────────────────────────────────
+ * Source-agnostic core engine
+ *
+ * A `source` is any independent vantage that reports observations
+ * (the app self-report, host metrics, an external probe, or a human
+ * override). `observations` is an append-only log; component status is
+ * DERIVED from the latest non-expired observation per source via quorum,
+ * never stored. `source_target_map` is the ONLY place vendor vocabulary
+ * (raw labels) touches the model — it maps a source's raw_label to a
+ * component (a `services.id`, the leaf component in the existing tree).
+ * ────────────────────────────────────────────────────────────── */
+
+export const sources = pgTable('sources', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  tokenHash: text('token_hash').notNull(),
+  // Trust weight; a higher-weight source (e.g. 'manual' override) counts more.
+  weight: integer('weight').notNull().default(1),
+  // 'push' (POSTs directly), 'probe' (external check), 'heartbeat' (must report or go stale), 'manual' (human override).
+  kind: text('kind').notNull().default('push'),
+  // Seconds; how long an observation from this source stays valid if it sets no explicit expires_at.
+  defaultTtl: integer('default_ttl'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+}, (table) => [
+  index('sources_token_hash_idx').on(table.tokenHash),
+]);
+
+export const observations = pgTable('observations', {
+  id: text('id').primaryKey(),
+  sourceId: text('source_id').notNull().references(() => sources.id, { onDelete: 'cascade' }),
+  // The resolved component this observation is about (a services.id).
+  componentId: text('component_id').notNull(),
+  // 'ok' | 'degraded' | 'down'.
+  signal: text('signal').notNull(),
+  detail: text('detail'),
+  observedAt: timestamp('observed_at', { withTimezone: true }).notNull().defaultNow(),
+  // Null = never expires; otherwise the dead-man / TTL horizon.
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+}, (table) => [
+  // Hot path: latest-per-(source,component) lookups for quorum.
+  index('observations_component_observed_idx').on(table.componentId, table.observedAt),
+  index('observations_source_component_observed_idx').on(table.sourceId, table.componentId, table.observedAt),
+]);
+
+export const sourceTargetMap = pgTable('source_target_map', {
+  id: text('id').primaryKey(),
+  sourceId: text('source_id').notNull().references(() => sources.id, { onDelete: 'cascade' }),
+  // The vendor's raw label for the target (e.g. "payments", "stripe-svc").
+  rawLabel: text('raw_label').notNull(),
+  // The component (services.id) this raw label resolves to.
+  componentId: text('component_id').notNull(),
+}, (table) => [
+  index('source_target_map_lookup_idx').on(table.sourceId, table.rawLabel),
 ]);

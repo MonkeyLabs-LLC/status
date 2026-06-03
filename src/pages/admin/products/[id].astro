@@ -1,0 +1,58 @@
+---
+/**
+ * Product detail / edit — generic form, plus archive (never delete).
+ */
+import AdminShell from '@/layouts/AdminShell.astro';
+import ResourceForm from '@/components/admin/ResourceForm.astro';
+import { db } from '@/db';
+import { products } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+import { archiveProduct, updateProduct } from '@/lib/db-products';
+import { getResource } from '@/lib/admin/resources';
+import { navCounts, propertyOptions } from '@/lib/admin/nav';
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/admin/products');
+const resource = getResource('products')!;
+const adminEmail = (Astro.locals as App.Locals).adminEmail ?? 'admin';
+let error = '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = form.get('_action')?.toString();
+  if (action === 'archive') {
+    await archiveProduct(id);
+    return Astro.redirect('/admin/products');
+  }
+  const name = form.get('name')?.toString().trim() ?? '';
+  if (!name) {
+    error = 'Name is required.';
+  } else {
+    await updateProduct(id, {
+      name,
+      tag: form.get('tag')?.toString().trim() || null,
+      launched: form.get('launched') === 'true',
+      domain: form.get('domain')?.toString().trim() || null,
+      brandColor: form.get('brandColor')?.toString().trim() || null,
+      sortOrder: parseInt(form.get('sortOrder')?.toString() ?? '0') || 0,
+    });
+    return Astro.redirect('/admin/products');
+  }
+}
+
+const rows = await db.select().from(products).where(eq(products.id, id));
+const record = rows[0];
+if (!record) return Astro.redirect('/admin/products');
+
+const counts = await navCounts();
+const properties = await propertyOptions();
+---
+<AdminShell title={record.name} active="products" adminEmail={adminEmail} counts={counts} property="all" properties={properties}
+  secondaryAction={{ href: '/admin/products', label: '← All products' }}>
+  <ResourceForm resource={resource} mode="edit" action={`/admin/products/${id}`}
+    record={record as any} error={error} cancelHref="/admin/products" />
+  <form method="POST" style="margin-top:16px">
+    <input type="hidden" name="_action" value="archive" />
+    <button class="btn danger" type="submit">Archive this product</button>
+  </form>
+</AdminShell>

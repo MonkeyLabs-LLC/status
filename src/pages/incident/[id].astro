@@ -1,48 +1,49 @@
 ---
-import Default from '../../layouts/Default.astro';
-import Breadcrumbs from '../../components/Breadcrumbs.astro';
-import IncidentCard from '../../components/IncidentCard.astro';
+/**
+ * Standalone incident detail (/incident/{id}). Crumbs come from the component
+ * tree (the node the incident is attached to); a tappable breadcrumb climbs
+ * back up any level. A missing incident renders a styled not-found.
+ */
+import Skin from '../../layouts/Skin.astro';
+import SkinCrumbs from '../../components/skin/SkinCrumbs.astro';
+import IncidentDetail from '../../components/skin/IncidentDetail.astro';
+import NotFound from '../../components/skin/NotFound.astro';
 import { getIncident } from '../../lib/db-incidents';
-import { getProduct } from '../../lib/products';
-import type { Incident, Product } from '../../lib/types';
+import { componentCrumbs } from '../../lib/components';
+import type { CrumbItem } from '../../lib/view';
+import type { Incident } from '../../lib/types';
 
 const { id } = Astro.params;
+const scope = (Astro.locals as any).scope as string | null;
 
 let incident: Incident | undefined;
-let product: Product | undefined;
+let crumbs: CrumbItem[] = [];
+let affectedPath: string[] = [];
 try {
   incident = id ? await getIncident(id) : undefined;
   if (incident) {
-    product = await getProduct(incident.product);
+    const leaf = (incident.affects ?? [])[0];
+    if (leaf) {
+      const ctx = await componentCrumbs(scope, leaf);
+      crumbs = ctx.crumbs;
+      affectedPath = ctx.affectedPath;
+    }
+    crumbs = [...crumbs, { label: incident.title }];
+    if (affectedPath.length === 0) affectedPath = [incident.title];
   }
 } catch (_e) {
   // DB unreachable
 }
 
-if (!incident) {
-  return new Response('Not found', { status: 404 });
-}
-const scope = (Astro.locals as any).scope as string | null;
-
-// Determine body state from incident severity
-const bodyState = incident.status === 'resolved'
-  ? 'working'
-  : incident.severity === 'major'
-    ? 'outage'
-    : incident.severity === 'moderate'
-      ? 'degraded'
-      : 'working';
+if (!incident) Astro.response.status = 404;
 ---
-<Default title={incident.title} bodyState={bodyState}>
-  <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
-    <Breadcrumbs items={[
-      ...(scope === null ? [{ label: 'MonkeyLabs', href: '/' }] : []),
-      ...(product ? [{ label: product.name, href: `/${product.id}` }] : []),
-      { label: incident.title },
-    ]} />
-
-    <div style="margin-top: 1em;">
-      <IncidentCard incident={incident} showTimeline={true} />
-    </div>
-  </div>
-</Default>
+<Skin scope={scope} title={incident ? incident.title : 'Not found'}>
+  {incident ? (
+    <>
+      <SkinCrumbs crumbs={crumbs} />
+      <IncidentDetail incident={incident} affectedPath={affectedPath} />
+    </>
+  ) : (
+    <NotFound title="Incident not found" message="That incident doesn't exist or was removed." />
+  )}
+</Skin>

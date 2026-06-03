@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getAllIncidents } from '../lib/db-incidents';
-import { SITE_TITLE, STATUS_DOMAIN } from '../lib/brand';
+import { SITE_TITLE, STATUS_DOMAIN } from '../pulse.config';
 import { incidentStatusLabel, severityLabel } from '../lib/types';
 import type { Incident } from '../lib/types';
 

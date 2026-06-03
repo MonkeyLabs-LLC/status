@@ -1,23 +1,19 @@
 ---
 /**
- * Umbrella incident history.
- * Shows ALL incidents across ALL products.
- * Scoped hosts have / rewritten to /scope by middleware, but /history is passed through —
- * so on a scoped host, /history shows all-products incidents (same view as the umbrella).
- * If you want product-scoped history, use /{product}/incidents.
+ * Incident history — every incident, newest first. Rendered in the public Skin
+ * so it matches the rest of the status site.
  */
-import Default from '../layouts/Default.astro';
-import Breadcrumbs from '../components/Breadcrumbs.astro';
-import IncidentHistoryItem from '../components/IncidentHistoryItem.astro';
-import Pagination from '../components/Pagination.astro';
-import EmptyState from '../components/EmptyState.astro';
+import Skin from '../layouts/Skin.astro';
+import SkinCrumbs from '../components/skin/SkinCrumbs.astro';
 import { getAllIncidents, countAllIncidents } from '../lib/db-incidents';
-import { COMPANY_NAME } from '../lib/brand';
+import { severityColor, severityLabel } from '../lib/skin-copy';
+import { incidentStatusLabel, formatDate } from '../lib/types';
+import { brandForScope } from '../lib/skin';
 import type { Incident } from '../lib/types';
 
-const PAGE_SIZE = 10;
-const pageParam = Astro.url.searchParams.get('page');
-const currentPage = Math.max(1, parseInt(pageParam || '1', 10) || 1);
+const scope = (Astro.locals as any).scope as string | null;
+const PAGE_SIZE = 15;
+const currentPage = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1', 10) || 1);
 const offset = (currentPage - 1) * PAGE_SIZE;
 
 let incidents: Incident[] = [];
@@ -29,25 +25,45 @@ try {
 } catch (_e) {
   // DB unreachable
 }
+
+const crumbs = [{ label: brandForScope(scope).wordmark, href: '/' }, { label: 'History' }];
 ---
-<Default title="Incident History">
-  <div class="page-wrap" style="padding-top: 2em; padding-bottom: 3em;">
-    <Breadcrumbs items={[
-      { label: COMPANY_NAME, href: '/' },
-      { label: 'History' },
-    ]} />
-
-    <h1 style="font-family: var(--sans); font-size: 22px; font-weight: 600; color: var(--text); margin: 1em 0 0.5em;">Incident History</h1>
-
-    {incidents.length > 0 ? (
-      <div>
-        {incidents.map((inc) => (
-          <IncidentHistoryItem incident={inc} />
-        ))}
-        <Pagination currentPage={currentPage} totalPages={totalPages} basePath="/history" />
-      </div>
-    ) : (
-      <EmptyState message="No incidents have been reported." />
-    )}
+<Skin scope={scope} title="Incident history">
+  <div class="banner" style="--bc:var(--ac)">
+    <span class="ic"></span>
+    <div>
+      <h1>Incident history</h1>
+      <p>Every incident, newest first.</p>
+    </div>
   </div>
-</Default>
+
+  <SkinCrumbs crumbs={crumbs} />
+
+  {incidents.length > 0 ? (
+    <>
+      <div class="seclbl">Past incidents</div>
+      {incidents.map((i) => {
+        const col = i.status === 'resolved' ? 'var(--ok)' : severityColor(i.severity);
+        return (
+          <a class="row" href={`/incident/${i.id}`} style={`--leg:${col}`}>
+            <div>
+              <div class="nm">{i.title}</div>
+              <div class="kd">{i.id} · {incidentStatusLabel(i.status).toLowerCase()} · {formatDate(i.started)}</div>
+            </div>
+            <span class="st" style={`color:${col}`}>{severityLabel(i.severity)}</span>
+            <span class="chev">›</span>
+          </a>
+        );
+      })}
+      {totalPages > 1 && (
+        <div class="crumbs" style="margin-top:18px">
+          {currentPage > 1 && <a href={`/history?page=${currentPage - 1}`}>← Newer</a>}
+          <span class="sep">page {currentPage} / {totalPages}</span>
+          {currentPage < totalPages && <a href={`/history?page=${currentPage + 1}`}>Older →</a>}
+        </div>
+      )}
+    </>
+  ) : (
+    <p class="mono" style="color:var(--muted);margin-top:24px;font-size:13px">No incidents reported yet.</p>
+  )}
+</Skin>

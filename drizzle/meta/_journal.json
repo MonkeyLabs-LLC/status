@@ -15,6 +15,20 @@
       "when": 1779955302675,
       "tag": "0001_solid_manta",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780381762418,
+      "tag": "0002_zippy_brood",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780432229327,
+      "tag": "0003_adorable_hydra",
+      "breakpoints": true
     }
   ]
 }

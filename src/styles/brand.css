@@ -1,0 +1,14 @@
+/* ============================================================================
+ * INSTANCE brand layer (Monkey Labs) — part of the Banana Pulse seam.
+ * The per-scope accent palette. Pulse's skins.css ships a brandless neutral
+ * default; this file recolors the accent per `data-scope` (light + dark).
+ * Swap this file (+ pulse.config.ts + /public/brand) for a different company.
+ * ========================================================================== */
+
+html[data-scope='monkeylabs'] body[data-skinned] { --ac: #0f7a29; }
+html[data-scope='sessions']   body[data-skinned] { --ac: #2f6bf0; }
+html[data-scope='bananalabs'] body[data-skinned] { --ac: #9a7a12; }
+
+html[data-theme='dark'][data-scope='monkeylabs'] body[data-skinned] { --ac: #2bb544; }
+html[data-theme='dark'][data-scope='sessions']   body[data-skinned] { --ac: #5b8bff; }
+html[data-theme='dark'][data-scope='bananalabs'] body[data-skinned] { --ac: #e6c04a; }

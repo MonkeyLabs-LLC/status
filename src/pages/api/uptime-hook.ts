@@ -1,8 +1,32 @@
+/**
+ * Legacy uptime webhook — now a THIN ADAPTER over the core engine.
+ *
+ * It keeps its fixed payload `{ service_id, status }` and shared-secret auth
+ * (back-compat for whatever is already pointed at it), but instead of writing
+ * service status directly it TRANSLATES the payload into a core observation
+ * and funnels it through the same quorum engine as /api/v1/ingest. There is
+ * exactly one core path; this route is just one of its adapters.
+ *
+ * Status translation: ok -> ok, deg -> degraded, out -> down.
+ * `maint` is not an observation signal (maintenance is a separate, scheduled
+ * concern); a maint payload is accepted but recorded only on the legacy
+ * uptime_90d bar, not the quorum engine.
+ */
 import type { APIRoute } from 'astro';
 import { db } from '@/db';
 import { services } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { timingSafeEqual } from 'node:crypto';
+import { getOrCreateAdapterSource } from '@/lib/sources';
+import { appendObservation, type Signal } from '@/lib/quorum';
+import { snapshotComponent, notifyForComponent } from '@/lib/notify';
+
+const SIGNAL_MAP: Record<string, Signal | 'maint'> = {
+  ok: 'ok',
+  deg: 'degraded',
+  out: 'down',
+  maint: 'maint',
+};
 
 export const POST: APIRoute = async ({ request }) => {
   const secret = process.env.UPTIME_HOOK_SECRET;
@@ -21,22 +45,19 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(JSON.stringify({ error: { code: 'bad_request', message: 'service_id and status are required.' } }), { status: 400 });
     }
 
-    const validStatuses = ['ok', 'deg', 'out', 'maint'];
-    if (!validStatuses.includes(newStatus)) {
-      return new Response(JSON.stringify({ error: { code: 'bad_request', message: `status must be one of: ${validStatuses.join(', ')}` } }), { status: 400 });
+    const mapped = SIGNAL_MAP[newStatus];
+    if (!mapped) {
+      return new Response(JSON.stringify({ error: { code: 'bad_request', message: `status must be one of: ${Object.keys(SIGNAL_MAP).join(', ')}` } }), { status: 400 });
     }
 
-    // Get current service
+    // Confirm the service (= component) exists.
     const rows = await db.select().from(services).where(eq(services.id, service_id));
     const svc = rows[0];
     if (!svc) {
       return new Response(JSON.stringify({ error: { code: 'not_found', message: 'Service not found.' } }), { status: 404 });
     }
 
-    // Update status
-    await db.update(services).set({ status: newStatus }).where(eq(services.id, service_id));
-
-    // Append to uptime_90d
+    // Always keep the 90-day uptime bar (legacy behavior the public page reads).
     const today = new Date().toISOString().split('T')[0];
     const uptime = Array.isArray(svc.uptime90d) ? [...(svc.uptime90d as any[])] : [];
     const existing = uptime.findIndex((d: any) => d.date === today);
@@ -45,9 +66,20 @@ export const POST: APIRoute = async ({ request }) => {
     } else {
       uptime.push({ date: today, status: newStatus });
     }
-    // Keep only last 90 days
-    const trimmed = uptime.slice(-90);
-    await db.update(services).set({ uptime90d: trimmed }).where(eq(services.id, service_id));
+    await db.update(services).set({ uptime90d: uptime.slice(-90) }).where(eq(services.id, service_id));
+
+    // Route real signals (ok/deg/out) through the core engine as an observation.
+    if (mapped !== 'maint') {
+      const source = await getOrCreateAdapterSource('UptimeRobot', 'probe');
+      const before = await snapshotComponent(service_id);
+      await appendObservation({
+        sourceId: source.id,
+        componentId: service_id, // the raw label IS the component id for this trusted adapter
+        signal: mapped,
+        detail: 'uptime-hook',
+      });
+      await notifyForComponent(service_id, before);
+    }
 
     return new Response(JSON.stringify({ data: { updated: true } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } catch {

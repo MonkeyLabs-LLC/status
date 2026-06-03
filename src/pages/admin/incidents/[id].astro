@@ -1,137 +1,151 @@
 ---
-import Admin from '@/layouts/Admin.astro';
+/**
+ * Incident detail — the recurring human surface during an event.
+ *
+ * What the human does here is narration + override, never status-flipping the
+ * engine's truth:
+ *   - move status (investigating→…→resolved): human-owned narration; writes the
+ *     field + a timeline entry.
+ *   - post update: pure narration (timeline entry).
+ *   - override level: an engine concern → routed through recordManualOverride so
+ *     the read model and the incident agree; never a hand-set severity field.
+ *   - force-resolve: routed through recordManualOverride (signal 'ok').
+ */
+import AdminShell from '@/layouts/AdminShell.astro';
 import { db } from '@/db';
 import { incidents, incidentTimeline } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import { getManualSource } from '@/lib/sources';
+import { recordManualOverride, type Level } from '@/lib/quorum';
+import { pillHtml, fmtDateTime } from '@/lib/admin/view';
+import { navCounts, propertyOptions } from '@/lib/admin/nav';
 
 const { id } = Astro.params;
 if (!id) return Astro.redirect('/admin/incidents');
+const who = (Astro.locals as App.Locals).adminEmail ?? 'admin';
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const action = form.get('_action')?.toString();
+  const cur = (await db.select().from(incidents).where(eq(incidents.id, id)))[0];
 
-  if (action === 'add_update') {
-    const label = form.get('label')?.toString() ?? 'UPDATE';
-    const body = form.get('body')?.toString() ?? '';
-    if (body) {
-      await db.insert(incidentTimeline).values({
-        id: nanoid(),
-        incidentId: id,
-        at: new Date(),
-        label: label.toUpperCase(),
-        body,
-      });
+  if (cur) {
+    if (action === 'move_status') {
+      const status = form.get('status')?.toString() ?? '';
+      const note = form.get('note')?.toString() || `Status moved to ${status}.`;
+      if (status === 'resolved') {
+        // Force-resolve through the engine (manual source clears its read).
+        const manual = await getManualSource();
+        await recordManualOverride({ manualSourceId: manual.id, componentId: cur.affects[0], signal: 'ok', body: note, author: who });
+      } else if (status) {
+        await db.update(incidents).set({ status }).where(eq(incidents.id, id));
+        await db.insert(incidentTimeline).values({ id: nanoid(), incidentId: id, at: new Date(), label: status.toUpperCase(), body: note, author: who });
+      }
+    }
+
+    if (action === 'post_update') {
+      const body = form.get('body')?.toString();
+      if (body) {
+        await db.insert(incidentTimeline).values({ id: nanoid(), incidentId: id, at: new Date(), label: cur.status.toUpperCase(), body, author: who });
+      }
+    }
+
+    if (action === 'override_level') {
+      const severity = form.get('severity')?.toString() ?? 'major';
+      const level: Level = severity === 'major' ? 'major' : 'degraded';
+      const note = form.get('note')?.toString() || `Level overridden to ${severity} by ${who}.`;
+      const manual = await getManualSource();
+      await recordManualOverride({ manualSourceId: manual.id, componentId: cur.affects[0], signal: level === 'major' ? 'down' : 'degraded', level, body: note, author: who });
+    }
+
+    if (action === 'resolve') {
+      const note = form.get('note')?.toString() || `Resolved by ${who}.`;
+      const manual = await getManualSource();
+      await recordManualOverride({ manualSourceId: manual.id, componentId: cur.affects[0], signal: 'ok', body: note, author: who });
     }
   }
-
-  if (action === 'change_status') {
-    const newStatus = form.get('status')?.toString() ?? '';
-    const updates: Record<string, any> = { status: newStatus };
-    if (newStatus === 'resolved') updates.resolvedAt = new Date();
-    await db.update(incidents).set(updates).where(eq(incidents.id, id));
-
-    // Auto-add timeline entry for status change
-    await db.insert(incidentTimeline).values({
-      id: nanoid(),
-      incidentId: id,
-      at: new Date(),
-      label: newStatus.toUpperCase(),
-      body: form.get('note')?.toString() || `Status changed to ${newStatus}.`,
-    });
-  }
+  return Astro.redirect(`/admin/incidents/${id}`);
 }
 
 const rows = await db.select().from(incidents).where(eq(incidents.id, id));
 const incident = rows[0];
 if (!incident) return Astro.redirect('/admin/incidents');
 
-const timeline = await db.select().from(incidentTimeline)
-  .where(eq(incidentTimeline.incidentId, id))
-  .orderBy(desc(incidentTimeline.at));
-
-const statusFlow = ['investigating', 'identified', 'monitoring', 'resolved'];
-const currentIdx = statusFlow.indexOf(incident.status);
-const nextStatuses = statusFlow.slice(currentIdx + 1);
-
-function formatTime(d: Date): string {
-  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
+const timeline = await db.select().from(incidentTimeline).where(eq(incidentTimeline.incidentId, id)).orderBy(desc(incidentTimeline.at));
+const states = ['investigating', 'identified', 'monitoring', 'resolved'];
+const counts = await navCounts();
+const properties = await propertyOptions();
 ---
-<Admin title={incident.title}>
-  <div class="admin-header">
-    <div>
-      <h1>{incident.title}</h1>
-      <div style="display:flex;gap:6px;margin-top:0.4em;">
-        <span class:list={['tag', incident.severity === 'major' ? 'tag-bad' : incident.severity === 'moderate' ? 'tag-warn' : '']}>{incident.severity.toUpperCase()}</span>
-        <span class="tag">{incident.status.toUpperCase()}</span>
-        {incident.affects.map(a => <span class="tag">{a}</span>)}
-      </div>
-    </div>
-  </div>
+<AdminShell title={incident.title} active="incidents" adminEmail={who} counts={counts} property="all" properties={properties}
+  secondaryAction={{ href: '/admin/incidents', label: '← All incidents' }}>
 
-  <div style="font-family:var(--mono);font-size:12px;color:var(--faint);margin-bottom:2em;">
-    Started {formatTime(incident.startedAt)}
-    {incident.resolvedAt && <span> · Resolved {formatTime(incident.resolvedAt)}</span>}
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+    <span set:html={pillHtml(incident.severity)} />
+    <span set:html={pillHtml(incident.status)} />
+    <span set:html={pillHtml(incident.auto ? 'declared' : 'ok', incident.auto ? 'auto' : 'manual')} />
   </div>
+  <p class="note" style="margin-bottom:20px">
+    {incident.id} · started {fmtDateTime(incident.startedAt)}
+    {incident.resolvedAt && <span> · resolved {fmtDateTime(incident.resolvedAt)}</span>}
+    {' · affects '}{incident.affects.join(', ')}
+  </p>
 
-  <!-- Status progression -->
-  {incident.status !== 'resolved' && nextStatuses.length > 0 && (
-    <div style="margin-bottom:2em;padding:16px;border:1px solid var(--line);border-radius:6px;">
-      <div class="config-label" style="margin-bottom:0.8em;">advance status</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        {nextStatuses.map(s => (
-          <form method="POST" style="display:inline;">
-            <input type="hidden" name="_action" value="change_status">
-            <input type="hidden" name="status" value={s}>
-            <input type="hidden" name="note" value="">
-            <button type="submit" class:list={['btn', s === 'resolved' ? 'btn-primary' : 'btn-secondary']} style="font-size:12px;">
-              {s === 'resolved' ? 'Resolve' : s.charAt(0).toUpperCase() + s.slice(1)}
-            </button>
+  {incident.status !== 'resolved' && (
+    <div class="form" style="margin-bottom:18px">
+      <label class="seclbl" style="margin-top:0">Move status</label>
+      <div class="tabs">
+        {states.map((s) => (
+          <form method="POST" style="display:inline">
+            <input type="hidden" name="_action" value="move_status" />
+            <input type="hidden" name="status" value={s} />
+            <button class:list={[{ on: incident.status === s }]} type="submit">{s}</button>
           </form>
         ))}
       </div>
+      <p class="note">Status is human-owned narration. "Resolved" force-resolves through the engine.</p>
     </div>
   )}
 
-  <!-- Add timeline entry -->
   {incident.status !== 'resolved' && (
-    <div style="margin-bottom:2em;">
-      <div class="config-label" style="margin-bottom:0.8em;">post update</div>
-      <form method="POST">
-        <input type="hidden" name="_action" value="add_update">
-        <div class="form-group">
-          <select name="label" class="config-input" style="max-width:200px;">
-            <option value="investigating">Investigating</option>
-            <option value="identified">Identified</option>
-            <option value="monitoring">Monitoring</option>
-            <option value="update">Update</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <textarea name="body" class="config-input" rows="2" placeholder="What changed, what you're doing next..." required style="resize:vertical;"></textarea>
-        </div>
-        <button type="submit" class="btn btn-primary" style="font-size:12px;">Post update</button>
-      </form>
-    </div>
+    <form method="POST" class="form" style="margin-bottom:18px">
+      <input type="hidden" name="_action" value="post_update" />
+      <div class="fld"><label>Post an update</label><textarea name="body" placeholder="Latest update — what changed, what you're doing next…" required></textarea></div>
+      <button class="btn pri" type="submit">Post update</button>
+    </form>
   )}
 
-  <!-- Timeline -->
-  <div class="section-head-left" style="margin-top:2em;">
-    <span class="eyebrow">timeline</span>
-  </div>
-  {timeline.length > 0 ? (
-    <div class="incident-timeline" style="margin-top:1em;">
-      {timeline.map((entry, i) => (
-        <div class:list={['timeline-entry', { 'timeline-entry-latest': i === 0 }]}>
-          <div class="timeline-entry-label">{entry.label}</div>
-          <div class="timeline-entry-time">{formatTime(entry.at)}</div>
-          <div class="timeline-entry-body">{entry.body}</div>
-        </div>
-      ))}
-    </div>
-  ) : (
-    <p style="color:var(--dim);font-size:14px;margin-top:1em;">No timeline entries yet.</p>
+  {incident.status !== 'resolved' && (
+    <form method="POST" class="form" style="margin-bottom:18px">
+      <input type="hidden" name="_action" value="override_level" />
+      <div class="fld"><label>Override level</label>
+        <select name="severity">
+          <option value="moderate" selected={incident.severity === 'moderate'}>Moderate / degraded</option>
+          <option value="major" selected={incident.severity === 'major'}>Major / outage</option>
+        </select>
+      </div>
+      <div class="fld"><label>Note (optional)</label><input type="text" name="note" placeholder="Why the level changed" /></div>
+      <button class="btn" type="submit">Override level</button>
+      <p class="note">Routes through the engine as a high-weight manual observation — never a hand-set field.</p>
+    </form>
   )}
-</Admin>
+
+  {incident.status !== 'resolved' && (
+    <form method="POST" class="form" style="margin-bottom:18px">
+      <input type="hidden" name="_action" value="resolve" />
+      <div class="fld"><label>Force-resolve</label><input type="text" name="note" placeholder="Resolution note (optional)" /></div>
+      <button class="btn danger" type="submit">Force-resolve incident</button>
+    </form>
+  )}
+
+  <div class="seclbl">Timeline</div>
+  <div class="timeline">
+    {timeline.length === 0 && <div class="ev muted">No timeline entries yet.</div>}
+    {timeline.map((e) => (
+      <div class="ev">
+        <b set:html={pillHtml(e.label.toLowerCase(), e.label)} /> <span class="ts">{fmtDateTime(e.at)} · {e.author}</span>
+        <div style="margin-top:5px;color:var(--txt);font-family:var(--sans)">{e.body}</div>
+      </div>
+    ))}
+  </div>
+</AdminShell>
