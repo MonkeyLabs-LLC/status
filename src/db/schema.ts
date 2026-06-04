@@ -128,6 +128,13 @@ export const sources = pgTable('sources', {
   weight: integer('weight').notNull().default(1),
   // 'push' (POSTs directly), 'probe' (external check), 'heartbeat' (must report or go stale), 'manual' (human override).
   kind: text('kind').notNull().default('push'),
+  // First-party trust. A `trusted` source is authoritative ground truth (the
+  // app's own self-report). It can DECLARE an incident ON ITS OWN — at reduced
+  // confidence (capped to degraded), never invisible — and a second source
+  // ESCALATES it to a confirmed/major outage. An untrusted source is a
+  // VALIDATOR: alone it only WATCHes (external false-positive guard); it needs
+  // quorum (>=2 agree) to declare. Default false — trust is opt-in per source.
+  trusted: boolean('trusted').notNull().default(false),
   // Seconds; how long an observation from this source stays valid if it sets no explicit expires_at.
   defaultTtl: integer('default_ttl'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

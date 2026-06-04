@@ -25,6 +25,7 @@ export const POST: APIRoute = async (ctx) => {
     name: b.name,
     kind: (b.kind as SourceKind) ?? 'push',
     weight: b.weight != null ? Number(b.weight) : 1,
+    trusted: b.trusted === true || b.trusted === 'true',
     defaultTtl: b.defaultTtl != null && b.defaultTtl !== '' ? Number(b.defaultTtl) : null,
   });
   // token returned exactly once.

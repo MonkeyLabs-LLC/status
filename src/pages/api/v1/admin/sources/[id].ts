@@ -31,6 +31,7 @@ export const PATCH: APIRoute = async (ctx) => {
   const u: Record<string, unknown> = {};
   if (b.name) u.name = b.name;
   if (b.weight != null && b.weight !== '') u.weight = Number(b.weight);
+  if (b.trusted !== undefined) u.trusted = b.trusted === true || b.trusted === 'true';
   if (b.defaultTtl !== undefined) u.defaultTtl = b.defaultTtl === '' || b.defaultTtl == null ? null : Number(b.defaultTtl);
   if (Object.keys(u).length) await db.update(sources).set(u).where(eq(sources.id, id));
   return ok({ id });

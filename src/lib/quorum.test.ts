@@ -25,6 +25,7 @@ function row(opts: {
   kind?: 'monitor' | 'manual';
   signal: 'ok' | 'degraded' | 'down';
   weight?: number;
+  trusted?: boolean; // first-party (default false = external validator)
   revoked?: boolean;
   expiresInSec?: number | null; // null/undefined => never expires
 }) {
@@ -37,6 +38,7 @@ function row(opts: {
     name: opts.sourceId,
     weight: opts.weight ?? 1,
     kind: opts.kind ?? 'monitor',
+    trusted: opts.trusted ?? false,
     revoked_at: opts.revoked ? NOW : null,
     signal: opts.signal,
     detail: null,
@@ -62,7 +64,7 @@ describe('quorum evaluateComponent — decision precedence (audit R5)', () => {
     expect(evaluationToStatus(ev)).toBe('operational');
   });
 
-  it('exactly one monitor non-ok => watch (surfaced, never declares/pages)', async () => {
+  it('exactly one UNTRUSTED monitor non-ok => watch (validator, never declares/pages alone)', async () => {
     const ev = await evalWith([row({ sourceId: 'm1', signal: 'down' }), row({ sourceId: 'm2', signal: 'ok' })]);
     expect(ev.state).toBe('watch');
     expect(ev.level).toBeNull();
@@ -161,6 +163,57 @@ describe('quorum evaluateComponent — decision precedence (audit R5)', () => {
     // state derives ok from zero LIVE non-ok reads — reconcileIncident's
     // hasLiveReads guard is what prevents auto-resolve during blackout.
     expect(ev.state).toBe('ok');
+  });
+});
+
+describe('quorum trusted-source ladder — single first-party declares, corroboration escalates', () => {
+  it('THE FIX: a lone TRUSTED "down" DECLARES (never an invisible watch) but is capped to degraded', async () => {
+    // The Resend case: only Evolution (trusted) probes it. Pre-fix this sat in
+    // WATCH and reported nothing. Now it declares — visible — but at degraded
+    // ("investigating"), because one vantage cannot confirm a full outage.
+    const ev = await evalWith([row({ sourceId: 'evolution', trusted: true, signal: 'down' })]);
+    expect(ev.state).toBe('declared');
+    expect(ev.level).toBe('degraded');
+    expect(ev.trustedNonOkCount).toBe(1);
+    expect(evaluationToStatus(ev)).toBe('degraded');
+  });
+
+  it('a lone TRUSTED "degraded" declares at degraded', async () => {
+    const ev = await evalWith([row({ sourceId: 'evolution', trusted: true, signal: 'degraded' })]);
+    expect(ev.state).toBe('declared');
+    expect(ev.level).toBe('degraded');
+  });
+
+  it('ESCALATION: trusted "down" + an external validator agreeing => declared MAJOR (confirmed full outage)', async () => {
+    const ev = await evalWith([
+      row({ sourceId: 'evolution', trusted: true, signal: 'down' }),
+      row({ sourceId: 'uptimerobot', trusted: false, signal: 'down' }),
+    ]);
+    expect(ev.state).toBe('declared');
+    expect(ev.level).toBe('major'); // two monitors now corroborate -> escalate
+    expect(evaluationToStatus(ev)).toBe('outage');
+  });
+
+  it('a lone UNTRUSTED validator "down" stays WATCH (cannot declare without corroboration)', async () => {
+    const ev = await evalWith([row({ sourceId: 'uptimerobot', trusted: false, signal: 'down' })]);
+    expect(ev.state).toBe('watch');
+    expect(ev.trustedNonOkCount).toBe(0);
+  });
+
+  it('a live manual "all clear" still outranks a single trusted vantage (human authority over one source)', async () => {
+    const ev = await evalWith([
+      row({ sourceId: 'evolution', trusted: true, signal: 'down' }),
+      row({ sourceId: 'manual', kind: 'manual', signal: 'ok', expiresInSec: MANUAL_OK_GRACE_SECONDS }),
+    ]);
+    expect(ev.state).toBe('ok');
+    expect(evaluationToStatus(ev)).toBe('operational');
+  });
+
+  it('a stale trusted "down" drops out (dead-man) => no phantom declare', async () => {
+    const ev = await evalWith([row({ sourceId: 'evolution', trusted: true, signal: 'down', expiresInSec: -10 })]);
+    expect(ev.state).toBe('ok');
+    expect(ev.trustedNonOkCount).toBe(0);
+    expect(ev.reducedCoverage).toBe(true);
   });
 });
 

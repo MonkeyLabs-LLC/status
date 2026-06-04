@@ -96,6 +96,7 @@ CREATE TABLE "sources" (
 	"token_hash" text NOT NULL,
 	"weight" integer DEFAULT 1 NOT NULL,
 	"kind" text DEFAULT 'push' NOT NULL,
+	"trusted" boolean DEFAULT false NOT NULL,
 	"default_ttl" integer,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"revoked_at" timestamp with time zone

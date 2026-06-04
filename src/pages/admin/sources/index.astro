@@ -33,10 +33,16 @@ if (Astro.request.method === 'POST') {
         name,
         kind: (form.get('kind')?.toString() as SourceKind) ?? 'push',
         weight: Number(form.get('weight')?.toString() || '1'),
+        trusted: form.get('trusted')?.toString() === 'true',
         defaultTtl: ttl ? Number(ttl) : null,
       });
       newToken = result.token;
     }
+  }
+  if (action === 'trust') {
+    const sid = form.get('source_id')?.toString() ?? '';
+    const to = form.get('trusted')?.toString() === 'true';
+    if (sid) await db.update(sources).set({ trusted: to }).where(eq(sources.id, sid));
   }
   if (action === 'rotate') {
     const sid = form.get('source_id')?.toString() ?? '';
@@ -84,21 +90,26 @@ const compName = (id: string) => components.find((c) => c.value === id)?.label ?
       <div><label>Trust weight</label><input type="number" name="weight" value="1" /></div>
       <div><label>Default TTL (seconds)</label><input type="number" name="defaultTtl" placeholder="300" /></div>
     </div>
-    <p class="note">Higher weight counts for more in quorum. Blank TTL = never expires (no dead-man for this source).</p>
+    <div class="fld"><label class="check"><input type="checkbox" name="trusted" value="true" /> Trusted (first-party)</label></div>
+    <p class="note">Higher weight counts for more in quorum. Blank TTL = never expires (no dead-man for this source). <strong>Trusted</strong> = a first-party vantage that may declare an incident on its own (capped to degraded); leave off for external validators, which only corroborate.</p>
     <button class="btn pri" type="submit">Register source</button>
   </form>
 
   <div class="seclbl">Sources</div>
   <div class="tbl">
-    <div class="tr head" style="grid-template-columns:1.4fr .8fr .6fr .8fr 1.2fr"><span>Name</span><span>Kind</span><span>Weight</span><span>TTL</span><span></span></div>
-    {list.length === 0 && <div class="tr" style="grid-template-columns:1.4fr .8fr .6fr .8fr 1.2fr"><span class="muted">No sources registered.</span></div>}
+    <div class="tr head" style="grid-template-columns:1.4fr .8fr .6fr .6fr .8fr 1.4fr"><span>Name</span><span>Kind</span><span>Trust</span><span>Weight</span><span>TTL</span><span></span></div>
+    {list.length === 0 && <div class="tr" style="grid-template-columns:1.4fr .8fr .6fr .6fr .8fr 1.4fr"><span class="muted">No sources registered.</span></div>}
     {list.map((s) => (
-      <div class="tr" style={`grid-template-columns:1.4fr .8fr .6fr .8fr 1.2fr;${s.revokedAt ? 'opacity:.5' : ''}`}>
+      <div class="tr" style={`grid-template-columns:1.4fr .8fr .6fr .6fr .8fr 1.4fr;${s.revokedAt ? 'opacity:.5' : ''}`}>
         <span class="t">{s.name}</span>
         <span set:html={pillHtml(s.kind)} />
+        <span set:html={s.kind === 'manual' ? pillHtml('ok', 'authoritative') : (s.trusted ? pillHtml('ok', 'trusted') : pillHtml('stale', 'validator'))} />
         <span class="muted">{s.weight}</span>
         <span class="muted">{s.defaultTtl ?? '—'}</span>
         <span style="display:flex;gap:6px;justify-content:flex-end">
+          {!s.revokedAt && s.kind !== 'manual' && (
+            <form method="POST"><input type="hidden" name="_action" value="trust" /><input type="hidden" name="source_id" value={s.id} /><input type="hidden" name="trusted" value={s.trusted ? 'false' : 'true'} /><button class="btn" style="padding:5px 10px" type="submit">{s.trusted ? 'Make validator' : 'Make trusted'}</button></form>
+          )}
           {!s.revokedAt && (
             <>
               <form method="POST"><input type="hidden" name="_action" value="rotate" /><input type="hidden" name="source_id" value={s.id} /><button class="btn" style="padding:5px 10px" type="submit">Rotate</button></form>

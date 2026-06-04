@@ -816,6 +816,13 @@
           "notNull": true,
           "default": "'push'"
         },
+        "trusted": {
+          "name": "trusted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "default_ttl": {
           "name": "default_ttl",
           "type": "integer",

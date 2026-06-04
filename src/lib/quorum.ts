@@ -2,14 +2,22 @@
  * Quorum engine — the brain of the source-agnostic core.
  *
  * Component current status is DERIVED, never stored. For each component we
- * gather the latest non-expired observation per source, count how many
- * sources report non-ok (degraded|down), and decide:
+ * gather the latest non-expired observation per source, count how many sources
+ * report non-ok (degraded|down), and decide on a CONFIDENCE LADDER — vantage
+ * validates and ESCALATES, it never hides a real signal:
  *
- *   >=2 agree  -> DECLARED. level = worst agreeing signal (down->major,
- *                 degraded->degraded). Open an auto-incident if none open,
- *                 else update its level. Templated first update.
- *    1 non-ok  -> WATCH. Logged/surfaced, NEVER pages, no incident.
- *    0 non-ok  -> OPERATIONAL. Auto-resolve any open auto-incident.
+ *   >=2 monitors agree   -> DECLARED, confirmed. level = worst agreeing signal
+ *                           (down->major, degraded->degraded).
+ *   1 TRUSTED first-party -> DECLARED, capped to degraded ("investigating"). A
+ *                           first-party report is real; one vantage just can't
+ *                           confirm a full outage. A 2nd source escalates it.
+ *   1 UNtrusted validator -> WATCH. Surfaced, NEVER pages, no incident (an
+ *                           uncorroborated external blip is the false-positive
+ *                           case WATCH exists for).
+ *   0 non-ok             -> OPERATIONAL. Auto-resolve any open auto-incident.
+ *
+ * On DECLARE: open an auto-incident if none open, else update its level.
+ * Templated first update. `trusted` is a per-source boolean (sources.trusted).
  *
  * A source past its TTL (observation.expires_at, or default_ttl from now)
  * is STALE: it drops out of quorum and flags reduced coverage (dead-man).
@@ -73,6 +81,7 @@ export interface ComponentEvaluation {
   reads: SourceRead[];      // latest non-expired read per active source
   staleCount: number;       // sources that should report but are past TTL
   nonOkCount: number;       // sources reporting degraded|down (non-stale)
+  trustedNonOkCount: number; // TRUSTED (first-party) monitors reporting non-ok (non-stale)
   totalSources: number;     // active (non-revoked) sources mapped/observing this component
   state: QuorumState;
   level: Level | null;      // only set when declared
@@ -94,6 +103,7 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
     name: string;
     weight: number;
     kind: string;
+    trusted: boolean;
     revoked_at: Date | null;
     signal: Signal;
     detail: string | null;
@@ -101,7 +111,7 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
     expires_at: Date | null;
   }>(sql`
     SELECT DISTINCT ON (o.source_id)
-      o.source_id, s.name, s.weight, s.kind, s.revoked_at,
+      o.source_id, s.name, s.weight, s.kind, s.trusted, s.revoked_at,
       o.signal, o.detail, o.observed_at, o.expires_at
     FROM ${observations} o
     JOIN ${sources} s ON s.id = o.source_id
@@ -118,6 +128,11 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
   // independently of any human verdict (see decision precedence below).
   let monitorNonOkCount = 0;
   let monitorDownAgrees = false;
+  // Live TRUSTED monitor (non-manual, first-party) non-ok reads. A trusted
+  // source is authoritative enough to DECLARE on its own (see decision
+  // precedence) — corroboration then escalates it; it is never demoted to a
+  // silent WATCH the way a lone untrusted validator is.
+  let trustedNonOkCount = 0;
   // The latest LIVE (non-expired) manual read, if any. `rows` is ordered newest
   // observation first per source, and the manual source emits at most one live
   // read, so the first live manual row we see is the current human verdict.
@@ -148,45 +163,47 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
         if (r.kind !== 'manual') {
           monitorNonOkCount++;
           if (read.signal === 'down') monitorDownAgrees = true;
+          if (r.trusted) trustedNonOkCount++;
         }
       }
     }
   }
 
-  const liveReads = reads.filter((r) => !r.stale);
-  const downAgrees = liveReads.some((r) => r.signal === 'down');
   let state: QuorumState;
   let level: Level | null = null;
-  // Decision precedence — MONITORS WIN ON CORROBORATION; a manual read carries
-  // weight but is SUBORDINATE to ≥2-monitor agreement:
+  // Decision precedence — a CONFIDENCE LADDER, not an on/off gate. Corroboration
+  // raises severity; it never decides whether a real signal is visible. The
+  // asymmetry is deliberate: a TRUSTED first-party source declares on its own,
+  // an UNtrusted external source only validates.
   //
-  //   1. ≥2 live MONITOR (non-manual) reads non-ok -> DECLARE at the worst
-  //      agreeing monitor level (any monitor 'down' -> major, else degraded). A
-  //      live manual 'ok' CANNOT suppress this — restores the "no invisible
+  //   1. ≥2 live MONITOR (non-manual) reads non-ok -> DECLARE, CONFIRMED. Worst
+  //      agreeing monitor level (any monitor 'down' -> major outage, else
+  //      degraded). A live manual 'ok' CANNOT suppress this — the "no invisible
   //      outage" guarantee. (CRITICAL/HIGH fix: previously a single manual 'ok'
   //      out-voted everything, so a write-scope token re-POSTing PATCH
   //      .../incidents/:id {"status":"resolved"} every <MANUAL_OK_GRACE_SECONDS
   //      pinned a monitor-confirmed outage GREEN forever, and one premature
   //      "all clear" hid a corroborated outage for up to an hour.)
-  //   2. Else a live manual NON-ok exists -> DECLARE at its level. Human
-  //      escalation stays authoritative and never auto-expires (a human declare
-  //      pages on its own; no monitor corroboration required).
+  //   2. Else a live manual NON-ok exists -> DECLARE at its full stated level.
+  //      Human escalation is authoritative and never auto-expires (a human
+  //      declare pages on its own; no corroboration required).
   //   3. Else a live manual 'ok' exists -> OPERATIONAL. With <2 monitors
   //      disagreeing a human can still clear a single-source / flapping
-  //      situation. This `ok` is given a grace TTL at write time
-  //      (MANUAL_OK_GRACE_SECONDS), so once it expires it becomes stale, drops
-  //      out here, and we fall through to monitor quorum — a stale resolve can
-  //      never permanently mask a future outage. An EXPIRED manual 'ok' is, by
-  //      virtue of `stale`, simply absent here.
-  //   4. Else fall back to the monitor quorum on ALL live non-ok reads: ≥2 agree
-  //      -> DECLARE; exactly one -> WATCH (surfaced, never pages); zero -> OK.
-  //
-  // Note: because a manual 'ok' no longer auto-resolves a ≥2-monitor-corroborated
-  // component (case 1 wins), the existing open auto-incident simply STAYS open —
-  // no auto-resolve, so no new incident, so no re-declare/re-spam churn. This does
-  // NOT reintroduce the original R4 churn: reconcileIncident only OPENS when no
-  // incident is already open (see openIncidentFor / the `!open` guard), so a
-  // standing outage keeps its one incident rather than spawning a second.
+  //      situation. This `ok` carries a grace TTL (MANUAL_OK_GRACE_SECONDS) so
+  //      once it expires it drops out and we fall back to monitor quorum — a
+  //      stale resolve can never permanently mask a future outage.
+  //   4. Else ≥1 live TRUSTED monitor non-ok -> DECLARE, but capped to
+  //      'degraded' (status reads degraded / "investigating") EVEN IF it said
+  //      'down'. A trusted first-party report is REAL and must never be a silent
+  //      WATCH — but one vantage cannot confirm a FULL outage. A second source
+  //      agreeing promotes this into branch 1 and escalates the level. This is
+  //      the fix for the single-vantage blind spot (a lone trusted "Resend
+  //      down" used to sit in WATCH and report NOTHING).
+  //   5. Else ≥1 live UNtrusted monitor non-ok -> WATCH (surfaced, never pages).
+  //      An external validator seeing a blip we cannot corroborate is exactly
+  //      the false-positive case WATCH exists for: it validates an outage, it
+  //      does not declare one alone.
+  //   6. Else -> OK.
   //
   // The corroboration set is gated on kind!='manual', NOT weight — so one
   // mis-weighted monitor can never page an outage without independent agreement.
@@ -198,10 +215,10 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
     level = liveManual.signal === 'down' ? 'major' : 'degraded';
   } else if (liveManual && liveManual.signal === 'ok') {
     state = 'ok';
-  } else if (nonOkCount >= 2) {
+  } else if (trustedNonOkCount >= 1) {
     state = 'declared';
-    level = downAgrees ? 'major' : 'degraded';
-  } else if (nonOkCount >= 1) {
+    level = 'degraded'; // single trusted vantage: real, but not a confirmed full outage
+  } else if (monitorNonOkCount >= 1) {
     state = 'watch';
   } else {
     state = 'ok';
@@ -212,6 +229,7 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
     reads,
     staleCount,
     nonOkCount,
+    trustedNonOkCount,
     totalSources: reads.length,
     state,
     level,

@@ -32,6 +32,9 @@ export async function createSource(opts: {
   kind?: SourceKind;
   weight?: number;
   defaultTtl?: number | null;
+  // First-party trust: a trusted source declares on its own (capped to
+  // degraded) instead of sitting in WATCH. External validators stay untrusted.
+  trusted?: boolean;
 }) {
   const raw = generateToken();
   const id = nanoid();
@@ -41,6 +44,7 @@ export async function createSource(opts: {
     tokenHash: hashToken(raw),
     kind: opts.kind ?? 'push',
     weight: opts.weight ?? 1,
+    trusted: opts.trusted ?? false,
     defaultTtl: opts.defaultTtl ?? null,
   });
   return { id, token: raw, name: opts.name };

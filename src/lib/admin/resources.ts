@@ -165,10 +165,11 @@ export const RESOURCES: ResourceDecl[] = [
     icon: '◈',
     blurb:
       'Register a source, issue/rotate its bearer token (shown once), set weight + default TTL, and map raw labels to components.',
-    listColumns: ['name', 'kind', 'weight', 'defaultTtl'],
+    listColumns: ['name', 'kind', 'trusted', 'weight', 'defaultTtl'],
     fields: [
       { name: 'name', label: 'Name', type: 'text', required: true, placeholder: 'evolution-self-report' },
       { name: 'kind', label: 'Kind', type: 'select', required: true, options: SOURCE_KIND_OPTIONS },
+      { name: 'trusted', label: 'Trusted (first-party)', type: 'boolean', placeholder: 'May declare on its own', hint: 'A trusted first-party vantage declares an incident alone (capped to degraded); a second source escalates it. Leave off for external validators, which only corroborate (alone they just WATCH).' },
       { name: 'weight', label: 'Trust weight', type: 'number', hint: 'Higher weight counts for more in quorum.', placeholder: '1' },
       { name: 'defaultTtl', label: 'Default TTL (seconds)', type: 'number', hint: 'How long an observation stays valid if it sets no explicit expiry. Blank = never expires (no dead-man).', placeholder: '300' },
     ],
