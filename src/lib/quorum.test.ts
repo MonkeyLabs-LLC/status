@@ -15,7 +15,7 @@ vi.mock('@/db', () => ({
   },
 }));
 
-import { evaluateComponent, evaluationToStatus, MANUAL_OK_GRACE_SECONDS, sameObservation, resolveExpiry } from './quorum';
+import { evaluateComponent, evaluationToStatus, MANUAL_OK_GRACE_SECONDS, sameObservation, resolveExpiry, confidenceToStatus } from './quorum';
 
 const NOW = new Date('2026-06-03T12:00:00Z');
 
@@ -167,15 +167,16 @@ describe('quorum evaluateComponent — decision precedence (audit R5)', () => {
 });
 
 describe('quorum trusted-source ladder — single first-party declares, corroboration escalates', () => {
-  it('THE FIX: a lone TRUSTED "down" DECLARES (never an invisible watch) but is capped to degraded', async () => {
-    // The Resend case: only Evolution (trusted) probes it. Pre-fix this sat in
-    // WATCH and reported nothing. Now it declares — visible — but at degraded
-    // ("investigating"), because one vantage cannot confirm a full outage.
+  it('DECOUPLE: a lone TRUSTED "down" declares at TRUE severity (major), confidence 1 — not capped to degraded', async () => {
+    // The Resend case: only Evolution (trusted) probes it. It declares — visible —
+    // at its REAL severity (major); the low confidence of one vantage is carried
+    // in the incident STATUS (investigating), not by softening severity to degraded.
     const ev = await evalWith([row({ sourceId: 'evolution', trusted: true, signal: 'down' })]);
     expect(ev.state).toBe('declared');
-    expect(ev.level).toBe('degraded');
+    expect(ev.level).toBe('major');
+    expect(ev.confidence).toBe(1);
     expect(ev.trustedNonOkCount).toBe(1);
-    expect(evaluationToStatus(ev)).toBe('degraded');
+    expect(evaluationToStatus(ev)).toBe('outage');
   });
 
   it('a lone TRUSTED "degraded" declares at degraded', async () => {
@@ -184,13 +185,14 @@ describe('quorum trusted-source ladder — single first-party declares, corrobor
     expect(ev.level).toBe('degraded');
   });
 
-  it('ESCALATION: trusted "down" + an external validator agreeing => declared MAJOR (confirmed full outage)', async () => {
+  it('ESCALATION: trusted "down" + an external validator agreeing => MAJOR, confidence 2 (status -> identified)', async () => {
     const ev = await evalWith([
       row({ sourceId: 'evolution', trusted: true, signal: 'down' }),
       row({ sourceId: 'uptimerobot', trusted: false, signal: 'down' }),
     ]);
     expect(ev.state).toBe('declared');
-    expect(ev.level).toBe('major'); // two monitors now corroborate -> escalate
+    expect(ev.level).toBe('major');    // severity already major from the lone trusted; corroboration doesn't change it
+    expect(ev.confidence).toBe(2);     // the 2nd vantage raises CONFIDENCE, not severity
     expect(evaluationToStatus(ev)).toBe('outage');
   });
 
@@ -256,5 +258,14 @@ describe('resolveExpiry — dead-man horizon from OBSERVED time', () => {
   it('no explicit + no/zero TTL => null (never expires)', () => {
     expect(resolveExpiry(observed, null, null)).toBeNull();
     expect(resolveExpiry(observed, undefined, 0)).toBeNull();
+  });
+});
+
+describe('confidenceToStatus — vantages set incident status, never severity', () => {
+  it('1 vantage => investigating, >=2 => identified', () => {
+    expect(confidenceToStatus(0)).toBe('investigating');
+    expect(confidenceToStatus(1)).toBe('investigating');
+    expect(confidenceToStatus(2)).toBe('identified');
+    expect(confidenceToStatus(5)).toBe('identified');
   });
 });

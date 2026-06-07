@@ -82,6 +82,7 @@ export interface ComponentEvaluation {
   staleCount: number;       // sources that should report but are past TTL
   nonOkCount: number;       // sources reporting degraded|down (non-stale)
   trustedNonOkCount: number; // TRUSTED (first-party) monitors reporting non-ok (non-stale)
+  confidence: number;       // corroborating monitor vantages -> incident status (1=investigating, >=2=identified)
   totalSources: number;     // active (non-revoked) sources mapped/observing this component
   state: QuorumState;
   level: Level | null;      // only set when declared
@@ -216,8 +217,13 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
   } else if (liveManual && liveManual.signal === 'ok') {
     state = 'ok';
   } else if (trustedNonOkCount >= 1) {
+    // DECOUPLE (severity<-signal, confidence<-votes): a lone trusted vantage
+    // declares at the TRUE severity of its signal (down -> major), NOT capped to
+    // degraded. The low confidence of a single vantage lives in the incident
+    // STATUS ("investigating"), never by faking a milder severity. A 2nd source
+    // raises confidence (status -> identified), not severity.
     state = 'declared';
-    level = 'degraded'; // single trusted vantage: real, but not a confirmed full outage
+    level = monitorDownAgrees ? 'major' : 'degraded';
   } else if (monitorNonOkCount >= 1) {
     state = 'watch';
   } else {
@@ -230,6 +236,7 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
     staleCount,
     nonOkCount,
     trustedNonOkCount,
+    confidence: monitorNonOkCount,
     totalSources: reads.length,
     state,
     level,
@@ -244,6 +251,21 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
 function levelToSeverity(level: Level): 'moderate' | 'major' {
   return level === 'major' ? 'major' : 'moderate';
 }
+
+/**
+ * Confidence (corroborating vantage count) -> incident STATUS. Vantages set
+ * confidence, never severity: 1 vantage = "investigating" (could be a single
+ * source being wrong), >=2 = "identified" (independently corroborated). Status
+ * only ever RISES (see reconcileIncident) — a dropped vantage never
+ * un-identifies a live incident.
+ */
+export function confidenceToStatus(confidence: number): 'investigating' | 'identified' {
+  return confidence >= 2 ? 'identified' : 'investigating';
+}
+
+// Monotonic ordering so the engine raises incident status but never downgrades
+// it (incl. a human-set 'monitoring', which outranks engine statuses).
+const STATUS_RANK: Record<string, number> = { investigating: 0, identified: 1, monitoring: 2, resolved: 3 };
 
 async function componentName(componentId: string): Promise<string> {
   const rows = await db.select({ name: components.name }).from(components).where(eq(components.id, componentId));
@@ -287,14 +309,15 @@ export async function reconcileIncident(ev: ComponentEvaluation, now = new Date(
   const name = await componentName(ev.componentId);
 
   if (ev.state === 'declared' && ev.level) {
-    const severity = levelToSeverity(ev.level);
+    const severity = levelToSeverity(ev.level);          // signal sets severity
+    const confStatus = confidenceToStatus(ev.confidence); // votes set status
     if (!open) {
       const incId = nanoid();
       await db.insert(incidents).values({
         id: incId,
         title: `${name} — ${ev.level === 'major' ? 'major outage' : 'degraded performance'}`,
         summary: templateFirstUpdate(name, ev.level),
-        status: 'investigating',
+        status: confStatus,
         severity,
         affects: [ev.componentId],
         auto: true,
@@ -304,15 +327,34 @@ export async function reconcileIncident(ev: ComponentEvaluation, now = new Date(
         id: nanoid(),
         incidentId: incId,
         at: now,
-        label: 'INVESTIGATING',
+        label: confStatus.toUpperCase(),
         body: templateFirstUpdate(name, ev.level),
         author: 'engine',
       });
-    } else if (open.auto && open.severity !== severity) {
-      // Engine owns level on its own incidents; escalate/de-escalate severity.
-      await db.update(incidents)
-        .set({ severity, title: `${name} — ${ev.level === 'major' ? 'major outage' : 'degraded performance'}` })
-        .where(eq(incidents.id, open.id));
+    } else if (open.auto) {
+      // Engine owns its own incidents: track severity to the current worst signal,
+      // and RAISE status as confidence grows — but NEVER downgrade (a dropped
+      // vantage can't un-identify a live incident; a human-set 'monitoring'
+      // outranks and is preserved).
+      const patch: { severity?: 'moderate' | 'major'; title?: string; status?: string } = {};
+      if (open.severity !== severity) {
+        patch.severity = severity;
+        patch.title = `${name} — ${ev.level === 'major' ? 'major outage' : 'degraded performance'}`;
+      }
+      if (STATUS_RANK[confStatus] > (STATUS_RANK[open.status] ?? 0)) {
+        patch.status = confStatus;
+      }
+      if (Object.keys(patch).length > 0) {
+        await db.update(incidents).set(patch).where(eq(incidents.id, open.id));
+        if (patch.status) {
+          await db.insert(incidentTimeline).values({
+            id: nanoid(), incidentId: open.id, at: now,
+            label: patch.status.toUpperCase(),
+            body: 'Independently corroborated by additional monitoring.',
+            author: 'engine',
+          });
+        }
+      }
     }
     // open && manual: leave entirely alone.
     return;
