@@ -75,7 +75,13 @@ const incident = rows[0];
 if (!incident) return Astro.redirect('/admin/incidents');
 
 const timeline = await db.select().from(incidentTimeline).where(eq(incidentTimeline.incidentId, id)).orderBy(desc(incidentTimeline.at));
-const states = ['investigating', 'identified', 'monitoring', 'resolved'];
+// The engine owns 'investigating'/'identified' on its OWN (auto) incidents via
+// confidence (vantage count) — exposing them as manual toggles there just invites
+// fighting the engine. Humans own the RECOVERY direction (monitoring/resolved).
+// Human-declared incidents keep the full lifecycle.
+const states = incident.auto
+  ? ['monitoring', 'resolved']
+  : ['investigating', 'identified', 'monitoring', 'resolved'];
 const counts = await navCounts();
 const properties = await propertyOptions();
 ---
@@ -105,7 +111,7 @@ const properties = await propertyOptions();
           </form>
         ))}
       </div>
-      <p class="note">Status is human-owned narration. "Resolved" force-resolves through the engine.</p>
+      <p class="note">{incident.auto ? 'Engine-detected incident: it sets investigating/identified itself from how many vantages agree — you own the recovery (monitoring/resolved). ' : 'Status is human-owned narration. '}"Resolved" force-resolves through the engine.</p>
     </div>
   )}
 
