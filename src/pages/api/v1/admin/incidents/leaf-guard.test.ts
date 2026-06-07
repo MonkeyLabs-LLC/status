@@ -8,7 +8,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // guard at the admin declare boundary.
 
 const { recordManualOverride } = vi.hoisted(() => ({
-  recordManualOverride: vi.fn(async () => undefined),
+  // one-arg signature so .mock.calls[0][0] typechecks (it's called with an opts object)
+  recordManualOverride: vi.fn(async (_opts: any) => undefined),
 }));
 
 vi.mock('@/lib/admin-api', () => ({
