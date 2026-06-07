@@ -45,7 +45,7 @@
  */
 import { db } from '@/db';
 import { observations, sources, sourceTargetMap, incidents, incidentTimeline, components } from '@/db/schema';
-import { eq, and, ne, sql } from 'drizzle-orm';
+import { eq, and, ne, desc, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 export type Signal = 'ok' | 'degraded' | 'down';
@@ -412,9 +412,48 @@ export async function derivedComponentStatuses(now = new Date()): Promise<Record
 /* ── ingest core (the one path) ──────────────────────────────── */
 
 /**
+ * Two reads are the SAME observation iff they carry the same signal AND the same
+ * observed instant. Used to dedup at-least-once webhook retries (a retry repeats
+ * the vendor's payload verbatim, including its event timestamp) WITHOUT ever
+ * suppressing a legitimate re-assertion at a new time or a real state change.
+ */
+export function sameObservation(
+  latest: { signal: Signal; observedAt: Date } | null | undefined,
+  incoming: { signal: Signal; observedAt: Date },
+): boolean {
+  return !!latest
+    && latest.signal === incoming.signal
+    && latest.observedAt.getTime() === incoming.observedAt.getTime();
+}
+
+/**
+ * Resolve an observation's expiry (the dead-man horizon): an explicit expires_at
+ * wins; else a TTL measured from the OBSERVED time (not ingest time) so a delayed
+ * or retried webhook lands with the correct horizon — a very late event is
+ * already-stale rather than granted a full fresh TTL; else null (never expires).
+ */
+export function resolveExpiry(
+  observedAt: Date,
+  explicit: Date | null | undefined,
+  ttlSeconds: number | null | undefined,
+): Date | null {
+  if (explicit) return explicit;
+  if (ttlSeconds && ttlSeconds > 0) return new Date(observedAt.getTime() + ttlSeconds * 1000);
+  return null;
+}
+
+/**
  * Append an observation and run quorum for its component. This is the single
- * core path — both /api/v1/ingest and the legacy uptime-hook adapter funnel
- * through here so there is exactly one engine entry point.
+ * core path — /api/v1/ingest and the vendor adapters (uptime-hook, grafana) all
+ * funnel through here so there is exactly one engine entry point.
+ *
+ * - `observedAt` (default now) is the SOURCE's event time — we store it and base
+ *   the TTL on it, so quorum's latest-per-source pick and the dead-man use real
+ *   event time, not whenever our server happened to process the webhook.
+ * - Idempotent: if the latest observation for this (source, component) is the
+ *   same signal at the same observed instant, this is an at-least-once retry —
+ *   skip the insert (`deduped: true`) so the append-only log doesn't bloat and a
+ *   retry can't read as a flap.
  */
 export async function appendObservation(opts: {
   sourceId: string;
@@ -423,13 +462,24 @@ export async function appendObservation(opts: {
   detail?: string | null;
   expiresAt?: Date | null;
   defaultTtlSeconds?: number | null;
+  observedAt?: Date;
   now?: Date;
-}): Promise<{ observationId: string; evaluation: ComponentEvaluation }> {
+}): Promise<{ observationId: string; evaluation: ComponentEvaluation; deduped: boolean }> {
   const now = opts.now ?? new Date();
-  // Resolve expiry: explicit expires_at wins, else source default_ttl from now, else null (never expires).
-  let expiresAt: Date | null = opts.expiresAt ?? null;
-  if (!expiresAt && opts.defaultTtlSeconds && opts.defaultTtlSeconds > 0) {
-    expiresAt = new Date(now.getTime() + opts.defaultTtlSeconds * 1000);
+  const observedAt = opts.observedAt ?? now;
+  const expiresAt = resolveExpiry(observedAt, opts.expiresAt, opts.defaultTtlSeconds);
+
+  // Idempotency: compare against the latest read for this (source, component).
+  const latestRows = await db
+    .select({ id: observations.id, signal: observations.signal, observedAt: observations.observedAt })
+    .from(observations)
+    .where(and(eq(observations.sourceId, opts.sourceId), eq(observations.componentId, opts.componentId)))
+    .orderBy(desc(observations.observedAt))
+    .limit(1);
+  const latest = latestRows[0] as { id: string; signal: Signal; observedAt: Date } | undefined;
+  if (sameObservation(latest, { signal: opts.signal, observedAt })) {
+    const evaluation = await runQuorum(opts.componentId, now);
+    return { observationId: latest!.id, evaluation, deduped: true };
   }
 
   const observationId = nanoid();
@@ -439,12 +489,12 @@ export async function appendObservation(opts: {
     componentId: opts.componentId,
     signal: opts.signal,
     detail: opts.detail ?? null,
-    observedAt: now,
+    observedAt,
     expiresAt,
   });
 
   const evaluation = await runQuorum(opts.componentId, now);
-  return { observationId, evaluation };
+  return { observationId, evaluation, deduped: false };
 }
 
 /**

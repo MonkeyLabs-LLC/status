@@ -85,7 +85,10 @@ export const POST: APIRoute = async ({ request }) => {
   const auth = request.headers.get('authorization') ?? '';
   const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
   const headerSecret = request.headers.get('X-Grafana-Hook-Secret') ?? '';
-  const provided = bearer || headerSecret;
+  // ?key=<secret> query fallback (parity with uptime-hook) for webhook senders
+  // that cannot set a custom header.
+  const querySecret = new URL(request.url).searchParams.get('key') ?? '';
+  const provided = bearer || headerSecret || querySecret;
   if (!provided || !secretMatches(provided, secret)) {
     return json({ error: { code: 'unauthorized', message: 'Invalid or missing secret.' } }, 401);
   }
@@ -128,6 +131,10 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     const detail = annotations.summary || annotations.description || `grafana:${labels.alertname ?? raw}`;
+    // Use the alert's own start time as the observed instant (not our processing
+    // time) so a delayed/retried webhook orders correctly and dedups.
+    const startsAt = typeof alert?.startsAt === 'string' ? new Date(alert.startsAt) : null;
+    const observedAt = startsAt && !isNaN(startsAt.getTime()) ? startsAt : undefined;
 
     // Snapshot before the engine runs so we can narrate the exact transition.
     const before = await snapshotComponent(componentId);
@@ -136,6 +143,7 @@ export const POST: APIRoute = async ({ request }) => {
       componentId,
       signal,
       detail,
+      observedAt,
       defaultTtlSeconds: source.defaultTtl ?? null,
     });
     await notifyForComponent(componentId, before);

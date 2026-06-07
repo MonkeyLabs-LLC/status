@@ -15,7 +15,7 @@ vi.mock('@/db', () => ({
   },
 }));
 
-import { evaluateComponent, evaluationToStatus, MANUAL_OK_GRACE_SECONDS } from './quorum';
+import { evaluateComponent, evaluationToStatus, MANUAL_OK_GRACE_SECONDS, sameObservation, resolveExpiry } from './quorum';
 
 const NOW = new Date('2026-06-03T12:00:00Z');
 
@@ -223,5 +223,38 @@ describe('evaluationToStatus mapping', () => {
     expect(evaluationToStatus({ state: 'declared', level: 'degraded' } as any)).toBe('degraded');
     expect(evaluationToStatus({ state: 'watch', level: null } as any)).toBe('operational');
     expect(evaluationToStatus({ state: 'ok', level: null } as any)).toBe('operational');
+  });
+});
+
+describe('sameObservation — idempotency key (signal + observed instant)', () => {
+  const t = new Date('2026-06-03T12:00:00Z');
+  it('null/undefined latest => never a duplicate', () => {
+    expect(sameObservation(null, { signal: 'down', observedAt: t })).toBe(false);
+    expect(sameObservation(undefined, { signal: 'down', observedAt: t })).toBe(false);
+  });
+  it('same signal AND same observed instant => duplicate (an at-least-once retry)', () => {
+    expect(sameObservation({ signal: 'down', observedAt: t }, { signal: 'down', observedAt: new Date(t) })).toBe(true);
+  });
+  it('same signal, different observed instant => NOT a duplicate (legit re-assertion)', () => {
+    const later = new Date(t.getTime() + 60_000);
+    expect(sameObservation({ signal: 'down', observedAt: t }, { signal: 'down', observedAt: later })).toBe(false);
+  });
+  it('different signal, same instant => NOT a duplicate (real state change)', () => {
+    expect(sameObservation({ signal: 'ok', observedAt: t }, { signal: 'down', observedAt: new Date(t) })).toBe(false);
+  });
+});
+
+describe('resolveExpiry — dead-man horizon from OBSERVED time', () => {
+  const observed = new Date('2026-06-03T12:00:00Z');
+  it('explicit expires_at wins over TTL', () => {
+    const explicit = new Date('2026-06-03T13:00:00Z');
+    expect(resolveExpiry(observed, explicit, 600)?.getTime()).toBe(explicit.getTime());
+  });
+  it('TTL is measured from observedAt, not now', () => {
+    expect(resolveExpiry(observed, null, 600)?.getTime()).toBe(observed.getTime() + 600_000);
+  });
+  it('no explicit + no/zero TTL => null (never expires)', () => {
+    expect(resolveExpiry(observed, null, null)).toBeNull();
+    expect(resolveExpiry(observed, undefined, 0)).toBeNull();
   });
 });
