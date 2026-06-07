@@ -42,7 +42,7 @@ monitors.
 3. URL to Notify (put your Step-1 secret after `key=`):
 
    ```
-   https://status.monkeylabs.gg/api/uptime-hook?key=YOUR-SECRET-HERE
+   https://status.monkeylabs.gg/api/v1/ingest/uptimerobot?key=YOUR-SECRET-HERE
    ```
 
 4. Choose **POST** and **send as JSON** (a.k.a. "custom JSON / raw"), and set the

@@ -1,7 +1,7 @@
 /**
  * POST /api/v1/ingest/grafana — Grafana Cloud alerting webhook adapter.
  *
- * THIN ADAPTER over the core engine (mirrors /api/uptime-hook). Grafana Cloud
+ * THIN ADAPTER over the core engine (mirrors /api/v1/ingest/uptimerobot). Grafana Cloud
  * (and Alertmanager-compatible) alert webhooks POST a fixed envelope with an
  * `alerts[]` array; this route translates each alert into a core observation
  * and funnels it through the SAME quorum engine as /api/v1/ingest via
@@ -85,7 +85,7 @@ export const POST: APIRoute = async ({ request }) => {
   const auth = request.headers.get('authorization') ?? '';
   const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
   const headerSecret = request.headers.get('X-Grafana-Hook-Secret') ?? '';
-  // ?key=<secret> query fallback (parity with uptime-hook) for webhook senders
+  // ?key=<secret> query fallback (parity with the uptimerobot adapter) for webhook senders
   // that cannot set a custom header.
   const querySecret = new URL(request.url).searchParams.get('key') ?? '';
   const provided = bearer || headerSecret || querySecret;

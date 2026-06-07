@@ -10,7 +10,7 @@
  * - Unknown / revoked tokens are rejected with 401.
  *
  * Vendor-specific fixed payloads never hit this route directly; they hit a
- * thin adapter (e.g. the legacy /api/uptime-hook) that translates to this
+ * thin adapter (e.g. /api/v1/ingest/uptimerobot) that translates to this
  * same core path via appendObservation().
  */
 import type { APIRoute } from 'astro';

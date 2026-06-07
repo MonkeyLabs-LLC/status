@@ -183,7 +183,7 @@ export const POST: APIRoute = async ({ request }) => {
       sourceId: source.id,
       componentId: serviceId, // legacy: the raw label IS the component id
       signal: mapped,
-      detail: 'uptime-hook',
+      detail: 'uptimerobot',
       defaultTtlSeconds: UPTIME_OBS_TTL_SECONDS,
     });
     await notifyForComponent(serviceId, before);

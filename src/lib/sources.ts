@@ -126,7 +126,7 @@ export async function getManualSource() {
 
 /**
  * Find (or lazily create) a named adapter source by a stable name. Used by
- * thin vendor adapters (e.g. the legacy uptime-hook) so their translated
+ * thin vendor adapters (e.g. uptimerobot) so their translated
  * observations attribute to one canonical source row without manual setup.
  * The adapter has its own auth (a shared secret), so the source token is
  * never used directly via /ingest.

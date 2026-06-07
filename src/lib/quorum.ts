@@ -444,7 +444,7 @@ export function resolveExpiry(
 
 /**
  * Append an observation and run quorum for its component. This is the single
- * core path — /api/v1/ingest and the vendor adapters (uptime-hook, grafana) all
+ * core path — /api/v1/ingest and the vendor adapters (uptimerobot, grafana) all
  * funnel through here so there is exactly one engine entry point.
  *
  * - `observedAt` (default now) is the SOURCE's event time — we store it and base

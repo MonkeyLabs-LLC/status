@@ -11,7 +11,7 @@ vi.mock('@/db', () => ({
   },
 }));
 
-import { uptimeAlertTypeToSignal, parseUptimeObservedAt, uptimeRawTarget } from './uptime-hook';
+import { uptimeAlertTypeToSignal, parseUptimeObservedAt, uptimeRawTarget } from './uptimerobot';
 
 describe('uptimeAlertTypeToSignal', () => {
   it('1 => down, 2 => ok, 3 => ssl (string or number form)', () => {
