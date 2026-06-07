@@ -9,7 +9,7 @@ import AdminShell from '@/layouts/AdminShell.astro';
 import { db } from '@/db';
 import { sources, sourceTargetMap } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { createSource, listSources, revokeSource, mapTarget, type SourceKind } from '@/lib/sources';
+import { createSource, listSources, revokeSource, mapTarget, removeMapping, type SourceKind } from '@/lib/sources';
 import { hashToken, generateToken } from '@/lib/api-tokens';
 import { getResource, SOURCE_KIND_OPTIONS } from '@/lib/admin/resources';
 import { componentOptions, pillHtml } from '@/lib/admin/view';
@@ -58,6 +58,9 @@ if (Astro.request.method === 'POST') {
     const raw = form.get('raw_label')?.toString() ?? '';
     const comp = form.get('component_id')?.toString() ?? '';
     if (sid && raw && comp) await mapTarget(sid, raw, comp);
+  }
+  if (action === 'unmap') {
+    await removeMapping(form.get('map_id')?.toString() ?? '');
   }
 }
 
@@ -134,13 +137,16 @@ const compName = (id: string) => components.find((c) => c.value === id)?.label ?
     <button class="btn pri" type="submit">Add mapping</button>
   </form>
   <div class="tbl">
-    <div class="tr head" style="grid-template-columns:1fr 1fr 1.4fr"><span>Source</span><span>Raw label</span><span>Component</span></div>
-    {maps.length === 0 && <div class="tr" style="grid-template-columns:1fr 1fr 1.4fr"><span class="muted">No mappings — sources you control can name components canonically without one.</span></div>}
+    <div class="tr head" style="grid-template-columns:1fr 1fr 1.4fr .6fr"><span>Source</span><span>Raw label</span><span>Component</span><span></span></div>
+    {maps.length === 0 && <div class="tr" style="grid-template-columns:1fr 1fr 1.4fr .6fr"><span class="muted">No mappings yet — add one above.</span></div>}
     {maps.map((m) => (
-      <div class="tr" style="grid-template-columns:1fr 1fr 1.4fr">
+      <div class="tr" style="grid-template-columns:1fr 1fr 1.4fr .6fr">
         <span class="t">{list.find((s) => s.id === m.sourceId)?.name ?? m.sourceId}</span>
         <span class="muted">{m.rawLabel}</span>
         <span class="muted">{compName(m.componentId)}</span>
+        <span style="display:flex;justify-content:flex-end">
+          <form method="POST"><input type="hidden" name="_action" value="unmap" /><input type="hidden" name="map_id" value={m.id} /><button class="btn danger" style="padding:5px 10px" type="submit">Remove</button></form>
+        </span>
       </div>
     ))}
   </div>

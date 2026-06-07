@@ -56,17 +56,21 @@ monitors.
 5. Save the alert contact, then **enable it on each monitor** you want feeding the
    status page (each monitor's settings → Alert Contacts To Notify → tick it).
 
-## Step 4 — Match each monitor to a status-page component
+## Step 4 — Map each monitor to a status-page component (in the admin)
 
-The status page needs to know which monitor maps to which service.
+The status page needs to know which monitor maps to which service. Use the
+**mapping** approach (the reusable way — name your monitors anything you like):
 
-**Easiest:** name the UptimeRobot monitor's **Friendly Name** to exactly match a
-status-page **component id** (e.g. `evolution-api`). No further setup — the
-adapter falls back to using the name as the component id.
+1. Status admin → **Sources & Tokens**.
+2. Under **Label → component mappings**, pick the **UptimeRobot** source, enter
+   the monitor's **`monitorID`** as the *Raw label* (find it in the UptimeRobot
+   monitor's URL/details), and choose the **Component** from the dropdown.
+3. **Add mapping.** Re-adding the same label just replaces it; **Remove** deletes
+   it. Repeat per monitor.
 
-**Or (cleaner, survives renames):** add a mapping row in the status admin so the
-monitor's `monitorID` points at the component. (Ask Claude to add a
-`source_target_map` row / admin field if you want this route.)
+Tip: map the numeric `monitorID` (it survives renames — recommended). If you skip
+mapping entirely, the adapter falls back to treating the monitor's friendly name
+as the component id.
 
 ---
 

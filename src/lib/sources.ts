@@ -76,14 +76,29 @@ export async function resolveTarget(sourceId: string, rawLabel: string): Promise
   return null;
 }
 
-/** Add a raw_label → component mapping for a source. */
+/**
+ * Add (or replace) a raw_label → component mapping for a source. Upsert: one
+ * mapping per (source, rawLabel), so re-mapping a label REPLACES it instead of
+ * creating an ambiguous duplicate (resolveTarget reads the first match).
+ */
 export async function mapTarget(sourceId: string, rawLabel: string, componentId: string) {
   if (!(await componentExists(componentId))) {
     throw new Error(`Unknown component "${componentId}".`);
   }
+  const existing = await db.select({ id: sourceTargetMap.id }).from(sourceTargetMap)
+    .where(and(eq(sourceTargetMap.sourceId, sourceId), eq(sourceTargetMap.rawLabel, rawLabel)));
+  if (existing[0]) {
+    await db.update(sourceTargetMap).set({ componentId }).where(eq(sourceTargetMap.id, existing[0].id));
+    return existing[0].id;
+  }
   const id = nanoid();
   await db.insert(sourceTargetMap).values({ id, sourceId, rawLabel, componentId });
   return id;
+}
+
+/** Remove a raw_label → component mapping by its id. */
+export async function removeMapping(id: string) {
+  await db.delete(sourceTargetMap).where(eq(sourceTargetMap.id, id));
 }
 
 /**
