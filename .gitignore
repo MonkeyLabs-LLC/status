@@ -35,3 +35,4 @@ pnpm-lock.yaml
 /*.mjs
 !astro.config.mjs
 /demo-shots/
+.resolver-ingest-token
