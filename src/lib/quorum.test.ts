@@ -15,7 +15,7 @@ vi.mock('@/db', () => ({
   },
 }));
 
-import { evaluateComponent, evaluationToStatus, MANUAL_OK_GRACE_SECONDS, sameObservation, resolveExpiry, confidenceToStatus } from './quorum';
+import { evaluateComponent, evaluationToStatus, MANUAL_OK_GRACE_SECONDS, sameObservation, resolveExpiry, refreshExpiry, confidenceToStatus } from './quorum';
 
 const NOW = new Date('2026-06-03T12:00:00Z');
 
@@ -258,6 +258,31 @@ describe('resolveExpiry — dead-man horizon from OBSERVED time', () => {
   it('no explicit + no/zero TTL => null (never expires)', () => {
     expect(resolveExpiry(observed, null, null)).toBeNull();
     expect(resolveExpiry(observed, undefined, 0)).toBeNull();
+  });
+});
+
+describe('refreshExpiry — re-assertion slides the dead-man horizon from receipt time', () => {
+  const now = new Date('2026-06-03T12:00:00Z');
+  it('extends an earlier horizon forward (repeat keeps a still-firing signal live)', () => {
+    const existing = new Date('2026-06-03T12:05:00Z');
+    expect(refreshExpiry(existing, now, null, 600)?.getTime()).toBe(now.getTime() + 600_000);
+  });
+  it('never shortens a later horizon', () => {
+    const existing = new Date('2026-06-03T13:00:00Z');
+    expect(refreshExpiry(existing, now, null, 600)).toBeNull();
+  });
+  it('replaces a NULL (never-expires) horizon once the source declares a TTL', () => {
+    expect(refreshExpiry(null, now, null, 600)?.getTime()).toBe(now.getTime() + 600_000);
+    expect(refreshExpiry(undefined, now, null, 600)?.getTime()).toBe(now.getTime() + 600_000);
+  });
+  it('re-assertion without a TTL leaves the row untouched', () => {
+    expect(refreshExpiry(null, now, null, null)).toBeNull();
+    expect(refreshExpiry(new Date('2026-06-03T12:01:00Z'), now, undefined, 0)).toBeNull();
+  });
+  it('explicit expires_at wins over TTL, still only extends forward', () => {
+    const explicit = new Date('2026-06-03T14:00:00Z');
+    expect(refreshExpiry(null, now, explicit, 600)?.getTime()).toBe(explicit.getTime());
+    expect(refreshExpiry(new Date('2026-06-03T15:00:00Z'), now, explicit, 600)).toBeNull();
   });
 });
 

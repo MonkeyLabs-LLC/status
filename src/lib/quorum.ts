@@ -485,6 +485,32 @@ export function resolveExpiry(
 }
 
 /**
+ * Horizon refresh for a deduped RE-ASSERTION (an at-least-once retry, or a
+ * repeat notification of a still-true alert, e.g. Grafana's repeat_interval).
+ * The first insert measures TTL from OBSERVED time (a late event arrives
+ * already-stale); a re-assertion is the source saying "still true NOW", so the
+ * horizon extends from receipt time — otherwise a long-lived outage expires
+ * off the page between repeats while the source is still firing.
+ *
+ * Returns the new expires_at to write, or null when no update is needed.
+ * - only extends forward (never shortens a later horizon)
+ * - an existing NULL horizon (never-expires) is replaced once the source
+ *   declares a TTL — an immortal observation is the dead-man bug, not a feature
+ * - a re-assertion carrying no TTL leaves the row untouched
+ */
+export function refreshExpiry(
+  existing: Date | null | undefined,
+  now: Date,
+  explicit: Date | null | undefined,
+  ttlSeconds: number | null | undefined,
+): Date | null {
+  const next = resolveExpiry(now, explicit, ttlSeconds);
+  if (!next) return null;
+  if (existing && existing.getTime() >= next.getTime()) return null;
+  return next;
+}
+
+/**
  * Append an observation and run quorum for its component. This is the single
  * core path — /api/v1/ingest and the vendor adapters (uptimerobot, grafana) all
  * funnel through here so there is exactly one engine entry point.
@@ -513,13 +539,19 @@ export async function appendObservation(opts: {
 
   // Idempotency: compare against the latest read for this (source, component).
   const latestRows = await db
-    .select({ id: observations.id, signal: observations.signal, observedAt: observations.observedAt })
+    .select({ id: observations.id, signal: observations.signal, observedAt: observations.observedAt, expiresAt: observations.expiresAt })
     .from(observations)
     .where(and(eq(observations.sourceId, opts.sourceId), eq(observations.componentId, opts.componentId)))
     .orderBy(desc(observations.observedAt))
     .limit(1);
-  const latest = latestRows[0] as { id: string; signal: Signal; observedAt: Date } | undefined;
+  const latest = latestRows[0] as { id: string; signal: Signal; observedAt: Date; expiresAt: Date | null } | undefined;
   if (sameObservation(latest, { signal: opts.signal, observedAt })) {
+    // Re-assertion: don't insert, but slide the dead-man horizon forward from
+    // receipt time so a still-firing signal stays live between repeats.
+    const refreshed = refreshExpiry(latest!.expiresAt, now, opts.expiresAt, opts.defaultTtlSeconds);
+    if (refreshed) {
+      await db.update(observations).set({ expiresAt: refreshed }).where(eq(observations.id, latest!.id));
+    }
     const evaluation = await runQuorum(opts.componentId, now);
     return { observationId: latest!.id, evaluation, deduped: true };
   }

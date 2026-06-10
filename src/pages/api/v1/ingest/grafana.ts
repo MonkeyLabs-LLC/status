@@ -50,6 +50,33 @@ import { snapshotComponent, notifyForComponent } from '@/lib/notify';
 
 const DEGRADED_SEVERITIES = new Set(['warning', 'warn', 'minor', 'info', 'low']);
 
+/**
+ * Dead-man TTL for Grafana observations. Grafana re-notifies a still-firing
+ * alert every `repeat_interval` (ours: 4h), and each repeat refreshes this
+ * horizon via the core's dedup re-assertion path — so the TTL must sit just
+ * PAST the repeat interval. 4.5h: a still-firing alert never goes stale, but a
+ * Grafana-side blackout (stack gone, webhook broken) expires within one cycle
+ * instead of pinning the last reading forever.
+ */
+const GRAFANA_OBS_TTL_SECONDS = Number(process.env.GRAFANA_HOOK_TTL_SECONDS) || 16200;
+
+/**
+ * Pick the observed instant for an alert. Firing → `startsAt`. Resolved →
+ * `endsAt` — NOT startsAt: Alertmanager keeps startsAt pinned to the firing
+ * instant on resolved notifications, so using it would land the `ok` at the
+ * SAME observed time as the `down` and the engine's latest-per-source pick
+ * (ordered by observed time) becomes a tie. Alertmanager's zero-value
+ * timestamp (0001-01-01) parses as a valid Date, so anything implausibly old
+ * is treated as absent. Absent/invalid → undefined (caller uses ingest time).
+ */
+export function grafanaObservedAt(alert: { status?: unknown; startsAt?: unknown; endsAt?: unknown }): Date | undefined {
+  const pickRaw = alert?.status === 'resolved' ? alert?.endsAt : alert?.startsAt;
+  if (typeof pickRaw !== 'string') return undefined;
+  const d = new Date(pickRaw);
+  if (isNaN(d.getTime()) || d.getTime() < Date.UTC(2000, 0, 1)) return undefined;
+  return d;
+}
+
 function json(body: unknown, status: number) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
@@ -131,10 +158,9 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     const detail = annotations.summary || annotations.description || `grafana:${labels.alertname ?? raw}`;
-    // Use the alert's own start time as the observed instant (not our processing
+    // Use the alert's own event time as the observed instant (not our processing
     // time) so a delayed/retried webhook orders correctly and dedups.
-    const startsAt = typeof alert?.startsAt === 'string' ? new Date(alert.startsAt) : null;
-    const observedAt = startsAt && !isNaN(startsAt.getTime()) ? startsAt : undefined;
+    const observedAt = grafanaObservedAt(alert);
 
     // Snapshot before the engine runs so we can narrate the exact transition.
     const before = await snapshotComponent(componentId);
@@ -144,7 +170,7 @@ export const POST: APIRoute = async ({ request }) => {
       signal,
       detail,
       observedAt,
-      defaultTtlSeconds: source.defaultTtl ?? null,
+      defaultTtlSeconds: source.defaultTtl ?? GRAFANA_OBS_TTL_SECONDS, // dead-man: stale if Grafana goes silent
     });
     await notifyForComponent(componentId, before);
 
