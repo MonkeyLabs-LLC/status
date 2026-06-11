@@ -1,4 +1,4 @@
-# Build output
+﻿# Build output
 dist/
 .astro/
 .netlify/
@@ -16,6 +16,7 @@ bun-debug.log*
 # Environment
 .env
 .env.*
+!.env.example
 netlify-env.txt
 
 # Editor
@@ -24,7 +25,7 @@ netlify-env.txt
 *.swp
 .DS_Store
 
-# Lockfiles — track ONE based on the package manager you actually use.
+# Lockfiles â€” track ONE based on the package manager you actually use.
 # Netlify build uses npm by default (see netlify.toml).
 bun.lock
 bun.lockb

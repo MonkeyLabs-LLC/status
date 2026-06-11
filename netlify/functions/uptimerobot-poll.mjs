@@ -45,7 +45,11 @@ export default async function handler() {
     return new Response('skipped: not configured', { status: 200 });
   }
 
-  const origin = (process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || 'https://status.monkeylabs.gg').replace(/\/$/, '');
+  const origin = (process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || '').replace(/\/$/, '');
+  if (!origin) {
+    console.error('[uptimerobot-poll] no site origin env (URL/DEPLOY_URL); skipping.');
+    return new Response('skipped: no origin', { status: 200 });
+  }
   const ingest = `${origin}/api/v1/ingest/uptimerobot?key=${encodeURIComponent(secret)}`;
 
   let monitors = [];

@@ -43,22 +43,6 @@ export interface Maintenance {
   body: string;
 }
 
-export interface Product {
-  id: string;
-  name: string;
-  tag: string | null;
-  launched: boolean;
-  domain: string | null;
-  brandColor: string | null;
-}
-
-export interface PaginatedQuery {
-  limit?: number;
-  offset?: number;
-  product?: string;
-  service?: string;
-}
-
 /** Maps ServiceStatus to the body state class name. */
 export function statusToState(s: ServiceStatus): string {
   switch (s) {

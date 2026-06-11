@@ -17,8 +17,8 @@
  *   "* * * * *"  = at every minute
  *
  * Required env (set in Netlify): UPTIME_HOOK_SECRET (the sweep's shared secret).
- * Site origin is taken from Netlify's built-in URL/DEPLOY_URL env; falls back to
- * the production status domain.
+ * Site origin is taken from Netlify's built-in URL/DEPLOY_URL env; if neither is
+ * set the sweep is skipped (no hardcoded instance domain).
  */
 
 export const config = {
@@ -33,11 +33,11 @@ export default async function handler() {
     return new Response('sweep skipped: not configured', { status: 200 });
   }
 
-  const origin =
-    process.env.URL ||
-    process.env.DEPLOY_PRIME_URL ||
-    process.env.DEPLOY_URL ||
-    'https://status.monkeylabs.gg';
+  const origin = process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || '';
+  if (!origin) {
+    console.error('[sweep-cron] no site origin env (URL/DEPLOY_URL); skipping sweep.');
+    return new Response('sweep skipped: no origin', { status: 200 });
+  }
 
   const target = `${origin.replace(/\/$/, '')}/api/v1/sweep`;
 

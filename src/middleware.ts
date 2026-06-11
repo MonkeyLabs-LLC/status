@@ -1,22 +1,23 @@
 import { defineMiddleware } from 'astro:middleware';
 import { resolveScope } from './lib/scope';
 import { verifyCookie, COOKIE_NAME } from './lib/admin-auth';
+import { SCOPES, UMBRELLA_ID } from './pulse.config';
 
 export const onRequest = defineMiddleware(async ({ request, locals, url, cookies, redirect }, next) => {
   const host = request.headers.get('host') || 'localhost';
   let scope = resolveScope(host);
 
-  // DEV-ONLY: preview any brand locally via ?scope=sessions|bananalabs|monkeylabs
+  // DEV-ONLY: preview any configured brand locally via ?scope=<scope id>
   // (real deploys pick the brand from the Host header). Persisted in a cookie so
   // it survives the internal rewrite that re-runs this middleware. import.meta.env
   // .DEV is false in production builds, so this is dead code there.
   if (import.meta.env.DEV) {
     const s = url.searchParams.get('scope');
-    if (s === 'monkeylabs') cookies.delete('__scope', { path: '/' });
+    if (s === UMBRELLA_ID) cookies.delete('__scope', { path: '/' });
     else if (s) cookies.set('__scope', s, { path: '/', httpOnly: false });
     const ov = s ?? cookies.get('__scope')?.value ?? null;
-    if (ov === 'sessions' || ov === 'bananalabs') scope = ov;
-    else if (ov === 'monkeylabs') scope = null;
+    if (ov === UMBRELLA_ID) scope = null;
+    else if (ov && SCOPES.some((sc) => sc.id === ov)) scope = ov;
   }
 
   (locals as any).scope = scope;

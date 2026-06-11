@@ -35,6 +35,8 @@ export const FOOTER_DOMAINS = ['monkeylabs.gg', 'sessions.gg', 'bananalabs.gg'];
 export const SITE_TITLE = `${COMPANY} Status`;
 export const SITE_DESCRIPTION = `Real-time status and incident history for ${COMPANY} services.`;
 export const SUPPORT_EMAIL = 'hello@monkeylabs.gg';
+/** localStorage key for the public page's light/dark preference. */
+export const THEME_STORAGE_KEY = 'ml-status-theme';
 
 export const SCOPES: ScopeConfig[] = [
   { id: 'monkeylabs', host: 'status.monkeylabs.gg', umbrella: true, wordmark: 'Monkey Labs', logo: '/brand/monkeylabs.png' },

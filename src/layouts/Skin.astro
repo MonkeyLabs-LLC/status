@@ -8,7 +8,7 @@
  * admin uses AdminShell.astro and is untouched.
  */
 import { scopeId, brandForScope } from '../lib/skin';
-import { COMPANY_LEGAL, FOOTER_DOMAINS } from '../pulse.config';
+import { COMPANY_LEGAL, FOOTER_DOMAINS, THEME_STORAGE_KEY } from '../pulse.config';
 
 import '../styles/tokens.css';
 import '../styles/skins.css';
@@ -26,7 +26,7 @@ const sid = scopeId(scope);
 const brand = brandForScope(scope);
 ---
 <!DOCTYPE html>
-<html lang="en" data-scope={sid}>
+<html lang="en" data-scope={sid} data-theme-key={THEME_STORAGE_KEY}>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -40,7 +40,7 @@ const brand = brandForScope(scope);
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <script is:inline>
-    (function () { try { if (localStorage.getItem('ml-status-theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {} })();
+    (function () { try { var k = document.documentElement.dataset.themeKey; if (localStorage.getItem(k) === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {} })();
   </script>
 </head>
 <body data-skinned>
@@ -72,9 +72,9 @@ const brand = brandForScope(scope);
 
   <script is:inline>
     function toggleTheme() {
-      var d = document.documentElement, dark = d.getAttribute('data-theme') === 'dark';
-      if (dark) { d.removeAttribute('data-theme'); try { localStorage.setItem('ml-status-theme', 'light'); } catch (e) {} }
-      else { d.setAttribute('data-theme', 'dark'); try { localStorage.setItem('ml-status-theme', 'dark'); } catch (e) {} }
+      var d = document.documentElement, k = d.dataset.themeKey, dark = d.getAttribute('data-theme') === 'dark';
+      if (dark) { d.removeAttribute('data-theme'); try { localStorage.setItem(k, 'light'); } catch (e) {} }
+      else { d.setAttribute('data-theme', 'dark'); try { localStorage.setItem(k, 'dark'); } catch (e) {} }
     }
   </script>
 </body>
