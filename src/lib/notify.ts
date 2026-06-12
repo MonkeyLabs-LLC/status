@@ -27,9 +27,10 @@
  * are intentional one-shots.
  */
 import { db } from '@/db';
-import { incidents, incidentTimeline, components, subscribers } from '@/db/schema';
+import { incidents, incidentTimeline, components } from '@/db/schema';
 import { eq, ne, desc, and, isNull, sql } from 'drizzle-orm';
 import { sendIncidentEmail } from './email';
+import { listConfirmedSubscribers, buildUnsubscribeUrl } from './subscribers';
 import { UMBRELLA_ID, COMPANY, STATUS_DOMAIN, scopeBrand } from '@/pulse.config';
 
 /** What kind of lifecycle event we are narrating to subscribers. */
@@ -144,25 +145,29 @@ export async function notifyIncident(incidentId: string, kind: NotifyKind): Prom
     const inc = rows[0];
     if (!inc) return;
 
-    const recipients = await db.select({ email: subscribers.email }).from(subscribers);
+    // Only confirmed subscribers receive emails (double opt-in).
+    const recipients = await listConfirmedSubscribers();
     if (recipients.length === 0) return;
 
     const scope = await resolveScopeName(inc.affects);
     const latest = await latestUpdateBody(incidentId);
-    const { subject, text, html } = renderIncidentEmail({
-      kind,
-      scope,
-      title: inc.title,
-      severity: inc.severity,
-      status: inc.status,
-      body: latest ?? inc.summary,
-      incidentUrl: incidentUrl(inc.id),
-    });
+    const base = process.env.PUBLIC_STATUS_URL || `https://${STATUS_DOMAIN}`;
 
     // Fan out. Sequential keeps it gentle on the Resend rate limit and avoids a
     // partial-failure storm; subscriber lists are small at this stage.
     for (const r of recipients) {
       try {
+        const unsubscribeUrl = buildUnsubscribeUrl(base, r.id);
+        const { subject, text, html } = renderIncidentEmail({
+          kind,
+          scope,
+          title: inc.title,
+          severity: inc.severity,
+          status: inc.status,
+          body: latest ?? inc.summary,
+          incidentUrl: incidentUrl(inc.id),
+          unsubscribeUrl,
+        });
         await sendIncidentEmail(r.email, subject, text, html);
       } catch (e) {
         console.error('[notify] send failed for', r.email, e);
@@ -230,8 +235,9 @@ export function renderIncidentEmail(opts: {
   status: string;
   body: string;
   incidentUrl: string;
+  unsubscribeUrl?: string;
 }): { subject: string; text: string; html: string } {
-  const { kind, scope, title, severity, body, incidentUrl } = opts;
+  const { kind, scope, title, severity, body, incidentUrl, unsubscribeUrl } = opts;
 
   let subject: string;
   let lead: string;
@@ -250,8 +256,9 @@ export function renderIncidentEmail(opts: {
       break;
   }
 
-  const text = `${lead}\n\n${body}\n\nFollow along: ${incidentUrl}\n\n— ${scope} Status\nYou're receiving this because you subscribed to status updates.`;
-  const html = incidentEmailHtml({ scope, title, lead, body, incidentUrl, resolved: kind === 'resolved' });
+  const unsubLine = unsubscribeUrl ? `\nUnsubscribe: ${unsubscribeUrl}` : '';
+  const text = `${lead}\n\n${body}\n\nFollow along: ${incidentUrl}\n\n— ${scope} Status\nYou're receiving this because you subscribed to status updates.${unsubLine}`;
+  const html = incidentEmailHtml({ scope, title, lead, body, incidentUrl, resolved: kind === 'resolved', unsubscribeUrl });
   return { subject, text, html };
 }
 
@@ -273,8 +280,9 @@ function incidentEmailHtml(opts: {
   body: string;
   incidentUrl: string;
   resolved: boolean;
+  unsubscribeUrl?: string;
 }): string {
-  const { scope, title, lead, body, incidentUrl, resolved } = opts;
+  const { scope, title, lead, body, incidentUrl, resolved, unsubscribeUrl } = opts;
   const accent = resolved ? '#22c55e' : '#f59e0b';
   const accentBg = resolved ? 'rgba(34,197,94,.10)' : 'rgba(245,158,11,.10)';
   const accentBorder = resolved ? 'rgba(34,197,94,.30)' : 'rgba(245,158,11,.30)';
@@ -302,7 +310,7 @@ function incidentEmailHtml(opts: {
     </table>
   </td></tr>
   <tr><td align="center" style="padding:16px 16px 32px;vertical-align:bottom;">
-    <p style="margin:0;font-family:'DM Mono','JetBrains Mono',monospace;font-size:10px;color:#524a3e;letter-spacing:.04em;">You're receiving this because you subscribed to status updates.</p>
+    <p style="margin:0;font-family:'DM Mono','JetBrains Mono',monospace;font-size:10px;color:#524a3e;letter-spacing:.04em;">You&rsquo;re receiving this because you subscribed to status updates.${unsubscribeUrl ? ` &middot; <a href="${unsubscribeUrl}" style="color:#524a3e;text-decoration:underline;">unsubscribe</a>` : ''}</p>
   </td></tr>
 </table>
 </body>
