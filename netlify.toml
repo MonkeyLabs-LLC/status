@@ -16,8 +16,9 @@
   directory = "netlify/functions"
 
 # Scheduled function: drives the autonomous dead-man / TTL sweep.
-# netlify/functions/sweep-cron.mjs declares `config.schedule = "* * * * *"`
-# (every minute) and POSTs to /api/v1/sweep with UPTIME_HOOK_SECRET, so the
+# netlify/functions/sweep-cron.mjs declares `config.schedule = "*/5 * * * *"`
+# (every 5 min — every-minute blew the free-tier function-invocation cap) and
+# POSTs to /api/v1/sweep with UPTIME_HOOK_SECRET, so the
 # quorum engine re-evaluates every component on a timer with no human in the
 # loop. The cadence is owned by the function's exported config; this block only
 # ensures the function directory is discovered.
