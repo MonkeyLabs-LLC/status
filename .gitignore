@@ -37,3 +37,8 @@ pnpm-lock.yaml
 !astro.config.mjs
 /demo-shots/
 .resolver-ingest-token
+
+# canonical tree seed (no secrets; reads DATABASE_URL from env)
+!/seed-tree.mjs
+# local one-off tree backups
+.tree-backup-*.json
