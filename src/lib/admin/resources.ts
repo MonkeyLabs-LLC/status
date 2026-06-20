@@ -100,6 +100,11 @@ export const COMPONENT_KIND_OPTIONS: FieldOption[] = [
   { value: 'host', label: 'Host' },
 ];
 
+export const MAINT_KIND_OPTIONS: FieldOption[] = [
+  { value: 'scheduled', label: 'Scheduled — planned & advertised' },
+  { value: 'emergency', label: 'Emergency — immediate' },
+];
+
 export const SOURCE_KIND_OPTIONS: FieldOption[] = [
   { value: 'push', label: 'Push — POSTs observations' },
   { value: 'probe', label: 'Probe — external check' },
@@ -152,6 +157,7 @@ export const RESOURCES: ResourceDecl[] = [
     fields: [
       { name: 'title', label: 'Title', type: 'text', required: true, placeholder: 'Postmark DNS migration' },
       { name: 'summary', label: 'Customer message', type: 'textarea', required: true, placeholder: 'Email may be delayed up to 15 min during the window.' },
+      { name: 'kind', label: 'Type', type: 'select', required: true, options: MAINT_KIND_OPTIONS, hint: 'Scheduled = planned & advertised (the Tuesday cadence). Emergency = immediate/urgent.' },
       { name: 'scheduledStart', label: 'Starts', type: 'datetime', required: true },
       { name: 'scheduledEnd', label: 'Ends', type: 'datetime', required: true },
       { name: 'affects', label: 'Affected component', type: 'multiselect', required: true, optionsKey: 'components' },

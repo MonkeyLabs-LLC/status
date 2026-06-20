@@ -27,7 +27,7 @@
  * are intentional one-shots.
  */
 import { db } from '@/db';
-import { incidents, incidentTimeline, components } from '@/db/schema';
+import { incidents, incidentTimeline, components, maintenance } from '@/db/schema';
 import { eq, ne, desc, and, isNull, sql } from 'drizzle-orm';
 import { sendIncidentEmail } from './email';
 import { listConfirmedSubscribers, buildUnsubscribeUrl } from './subscribers';
@@ -176,6 +176,81 @@ export async function notifyIncident(incidentId: string, kind: NotifyKind): Prom
   } catch (e) {
     console.error('[notify] notifyIncident failed', e);
   }
+}
+
+/**
+ * Email confirmed subscribers about a maintenance window. `kind`:
+ *  - 'announced' when it's created (advertise ahead)
+ *  - 'started' / 'ended' when the window opens/closes (needs a sweep to fire).
+ * Best-effort + sequential, mirroring notifyIncident.
+ */
+export async function notifyMaintenance(maintId: string, kind: 'announced' | 'started' | 'ended'): Promise<void> {
+  try {
+    const rows = await db.select().from(maintenance).where(eq(maintenance.id, maintId));
+    const m = rows[0];
+    if (!m) return;
+    const recipients = await listConfirmedSubscribers();
+    if (recipients.length === 0) return;
+    const scope = await resolveScopeName(m.affects);
+    const base = process.env.PUBLIC_STATUS_URL || `https://${STATUS_DOMAIN}`;
+    for (const r of recipients) {
+      try {
+        const unsubscribeUrl = buildUnsubscribeUrl(base, r.id);
+        const { subject, text, html } = renderMaintenanceEmail({
+          kind, scope, title: m.title, body: m.summary,
+          emergency: ((m as { kind?: string }).kind ?? 'scheduled') === 'emergency',
+          start: m.scheduledStart, end: m.scheduledEnd,
+          statusUrl: base.replace(/\/$/, ''), unsubscribeUrl,
+        });
+        await sendIncidentEmail(r.email, subject, text, html);
+      } catch (e) {
+        console.error('[notify] maintenance send failed for', r.email, e);
+      }
+    }
+  } catch (e) {
+    console.error('[notify] notifyMaintenance failed', e);
+  }
+}
+
+/** Templated subject/body for a maintenance window. */
+export function renderMaintenanceEmail(opts: {
+  kind: 'announced' | 'started' | 'ended';
+  scope: string;
+  title: string;
+  body: string;
+  emergency: boolean;
+  start: Date;
+  end: Date;
+  statusUrl: string;
+  unsubscribeUrl?: string;
+}): { subject: string; text: string; html: string } {
+  const { kind, scope, title, body, emergency, start, end, statusUrl, unsubscribeUrl } = opts;
+  const label = emergency ? 'Emergency maintenance' : 'Scheduled maintenance';
+  const when = `${start.toUTCString()} – ${end.toUTCString()}`;
+  let subject: string;
+  let lead: string;
+  switch (kind) {
+    case 'announced':
+      subject = `[${scope}] ${label}: ${title}`;
+      lead = `${emergency ? 'Emergency' : 'Scheduled'} maintenance is planned for ${scope}.`;
+      break;
+    case 'started':
+      subject = `[${scope}] Maintenance started: ${title}`;
+      lead = `Maintenance on ${scope} has begun.`;
+      break;
+    case 'ended':
+      subject = `[${scope}] Maintenance complete: ${title}`;
+      lead = `Maintenance on ${scope} is complete. Thanks for your patience.`;
+      break;
+  }
+  const unsubLine = unsubscribeUrl ? `\nUnsubscribe: ${unsubscribeUrl}` : '';
+  const text = `${lead}\n\nWhen: ${when}\n\n${body}\n\nStatus: ${statusUrl}\n\n— ${scope} Status\nYou're receiving this because you subscribed to status updates.${unsubLine}`;
+  const html = incidentEmailHtml({
+    scope, title: `${label}: ${title}`, lead,
+    body: `${body}\n\nWhen: ${when}`,
+    incidentUrl: statusUrl, resolved: kind === 'ended', unsubscribeUrl,
+  });
+  return { subject, text, html };
 }
 
 /* ── copy + scope helpers ────────────────────────────────────── */

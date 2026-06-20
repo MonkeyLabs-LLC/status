@@ -38,6 +38,17 @@ export interface CrumbItem {
   href?: string;
 }
 
+/** A maintenance window relevant to the current scope (for the banner). */
+export interface MaintWindow {
+  id: string;
+  title: string;
+  summary: string;
+  start: string; // ISO 8601
+  end: string;   // ISO 8601
+  kind: string;  // 'scheduled' | 'emergency'
+  active: boolean; // now within [start, end]
+}
+
 export interface ScopeView {
   /** Effective rolled-up status for the whole scope. */
   status: ServiceStatus;
@@ -67,6 +78,8 @@ export interface ScopeView {
   maintCount: number;
   /** Names of children that are not operational (for headline copy). */
   affectedChildNames: string[];
+  /** Active + upcoming maintenance windows touching this scope (for the banner). */
+  maintenance: MaintWindow[];
   /** This node's own 90-day day-status history (DayStatus[]) for its bar strip. */
   uptime: string[];
   /** This node's reliability % over the days that have data. */

@@ -55,6 +55,16 @@ const DAY_COLOR: Record<string, string> = {
   ok: 'var(--ok)', deg: 'var(--degr)', out: 'var(--major)', maint: 'var(--maint)', future: 'var(--line2)',
 };
 ---
+{view.maintenance.map((m) => (
+  <div class:list={["maintbar", m.kind === 'emergency' && 'emergency', m.active && 'active']}>
+    <span class="mtag">{m.kind === 'emergency' ? 'Emergency maintenance' : m.active ? 'Maintenance in progress' : 'Scheduled maintenance'}</span>
+    <div class="mbody">
+      <strong>{m.title}</strong>
+      <span class="mwhen">{formatDate(m.start)} {formatTime(m.start)} – {formatTime(m.end)}{m.summary ? `  ·  ${m.summary}` : ''}</span>
+    </div>
+  </div>
+))}
+
 <div class="banner" style={`--bc:${bannerColor}`}>
   <span class="ic"></span>
   <div>

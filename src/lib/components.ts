@@ -8,16 +8,17 @@
  * landing root (the entry domain), so drilling never crosses domains.
  */
 import { db } from '@/db';
-import { components } from '@/db/schema';
-import { isNull, asc, eq } from 'drizzle-orm';
+import { components, maintenance } from '@/db/schema';
+import { isNull, asc, eq, gte } from 'drizzle-orm';
 import type { ServiceStatus, Incident } from './types';
 import { statusToState } from './types';
 import { derivedComponentStatuses, evaluateComponent, openIncidentFor } from './quorum';
 import { getActiveIncidents } from './db-incidents';
 import { rootComponentId, UMBRELLA_ID } from '@/pulse.config';
-import type { ScopeView, ViewChild, CrumbItem } from './view';
+import type { ScopeView, ViewChild, CrumbItem, MaintWindow } from './view';
 
 type Comp = typeof components.$inferSelect;
+type MaintRow = typeof maintenance.$inferSelect;
 
 function mapStatus(s: string): ServiceStatus {
   switch (s) {
@@ -96,13 +97,15 @@ interface Tree {
   kids: Map<string, Comp[]>;
   derived: Record<string, { status: 'operational' | 'degraded' | 'outage' }>;
   incidents: Incident[];
+  maintenance: MaintRow[];
 }
 
 async function loadTree(): Promise<Tree> {
-  const [rows, derived, incs] = await Promise.all([
+  const [rows, derived, incs, maints] = await Promise.all([
     db.select().from(components).where(isNull(components.archivedAt)).orderBy(asc(components.sortOrder)),
     derivedComponentStatuses(),
     getActiveIncidents(),
+    db.select().from(maintenance).where(gte(maintenance.scheduledEnd, new Date())).orderBy(asc(maintenance.scheduledStart)),
   ]);
   const byId = new Map<string, Comp>();
   const kids = new Map<string, Comp[]>();
@@ -113,7 +116,24 @@ async function loadTree(): Promise<Tree> {
     arr.push(r);
     kids.set(r.parentId, arr);
   }
-  return { byId, kids, derived: derived as any, incidents: incs.filter((i) => i.status !== 'resolved') };
+  return { byId, kids, derived: derived as any, incidents: incs.filter((i) => i.status !== 'resolved'), maintenance: maints };
+}
+
+// Active + upcoming maintenance windows touching a node's subtree (for the banner).
+function subtreeMaintenance(t: Tree, id: string): MaintWindow[] {
+  const ids = new Set(subtreeIds(t, id));
+  const now = Date.now();
+  return t.maintenance
+    .filter((m) => (m.affects ?? []).some((a) => ids.has(a)))
+    .map((m) => ({
+      id: m.id,
+      title: m.title,
+      summary: m.summary,
+      start: m.scheduledStart.toISOString(),
+      end: m.scheduledEnd.toISOString(),
+      kind: (m as { kind?: string }).kind ?? 'scheduled',
+      active: m.scheduledStart.getTime() <= now && m.scheduledEnd.getTime() >= now,
+    }));
 }
 
 function ownStatus(t: Tree, id: string): ServiceStatus {
@@ -214,6 +234,7 @@ export async function buildComponentView(scope: string | null, segs: string[]): 
   const status = effective(t, id);
   const kids = t.kids.get(id) ?? [];
   const upMemo = new Map<string, string[]>(); // derived-uptime cache for this build
+  const scopeMaint = subtreeMaintenance(t, id);
 
   const children: ViewChild[] = kids.map((c) => ({
     id: c.id,
@@ -221,7 +242,7 @@ export async function buildComponentView(scope: string | null, segs: string[]): 
     kind: (c.tag ?? c.kind) as ViewChild['kind'],
     status: effective(t, c.id),
     issueCount: issueCount(t, c.id),
-    maintCount: 0,
+    maintCount: subtreeMaintenance(t, c.id).length,
     href: hrefFor(t, c.id, rootId),
     uptime: derivedUptime(t, c.id, upMemo),
     uptimePct: uptimePctOf(derivedUptime(t, c.id, upMemo)),
@@ -249,7 +270,8 @@ export async function buildComponentView(scope: string | null, segs: string[]): 
     attachedIncidents: incidentsAt(t, id),
     subtreeIncidents: subtreeIncidentList(t, id),
     issueCount: issueCount(t, id),
-    maintCount: 0,
+    maintCount: scopeMaint.length,
+    maintenance: scopeMaint,
     affectedChildNames: children.filter((c) => c.status !== 'operational').map((c) => c.name),
     uptime: derivedUptime(t, id, upMemo),
     uptimePct: uptimePctOf(derivedUptime(t, id, upMemo)),
