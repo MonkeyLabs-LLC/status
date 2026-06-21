@@ -56,7 +56,7 @@ const DAY_COLOR: Record<string, string> = {
 };
 ---
 {view.maintenance.map((m) => {
-  const prominent = m.kind === 'emergency' || m.active; // big banner only when urgent/live
+  const prominent = m.kind === 'emergency'; // only emergencies get the big banner; scheduled stays a quiet strip
   return (
     <div class:list={["maintbar", m.kind === 'emergency' && 'emergency', m.active && 'active', !prominent && 'compact']}>
       <span class="mtag">{m.kind === 'emergency' ? 'Emergency maintenance' : m.active ? 'Maintenance in progress' : 'Scheduled'}</span>

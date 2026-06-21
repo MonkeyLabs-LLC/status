@@ -10,6 +10,7 @@ import { nanoid } from 'nanoid';
 import { getResource } from '@/lib/admin/resources';
 import { componentExists, isLeafComponent } from '@/lib/components';
 import { notifyMaintenance } from '@/lib/notify';
+import { setSessionsSiteAlert } from '@/lib/sessions-alert';
 import { componentOptions } from '@/lib/admin/view';
 import { navCounts, propertyOptions } from '@/lib/admin/nav';
 
@@ -42,6 +43,10 @@ if (Astro.request.method === 'POST') {
       scheduledStart: new Date(start), scheduledEnd: new Date(end), affects,
     });
     await notifyMaintenance(newId, 'announced'); // email subscribers (best-effort, self-guarded)
+    // Emergency windows also light up the Sessions.gg storefront banner (critical).
+    if (kind === 'emergency') {
+      await setSessionsSiteAlert({ active: true, level: 'critical', message: title });
+    }
     return Astro.redirect('/admin/maintenance');
   }
 }

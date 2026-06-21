@@ -119,6 +119,29 @@ async function loadTree(): Promise<Tree> {
   return { byId, kids, derived: derived as any, incidents: incs.filter((i) => i.status !== 'resolved'), maintenance: maints };
 }
 
+// Automatic recurring maintenance advisory: shows Monday (heads-up) + all Tuesday
+// (UTC), no DB row — computed from the clock. Displayed window is Tue evening.
+// Always 'scheduled' so it renders as the quiet compact strip. Org-wide.
+function recurringMaintenance(): MaintWindow[] {
+  const now = new Date();
+  const day = now.getUTCDay(); // 0=Sun … 1=Mon, 2=Tue
+  if (day !== 1 && day !== 2) return [];
+  const tue = new Date(now);
+  tue.setUTCDate(now.getUTCDate() + (2 - day)); // Mon → +1, Tue → 0
+  tue.setUTCHours(20, 0, 0, 0);
+  const end = new Date(tue);
+  end.setUTCHours(23, 59, 0, 0);
+  return [{
+    id: 'recurring-tuesday',
+    title: 'Weekly maintenance',
+    summary: 'Routine maintenance may occur Tuesday evening — brief disruptions possible.',
+    start: tue.toISOString(),
+    end: end.toISOString(),
+    kind: 'scheduled',
+    active: false, // routine → stays compact, never the big banner
+  }];
+}
+
 // Active + upcoming maintenance windows touching a node's subtree (for the banner).
 function subtreeMaintenance(t: Tree, id: string): MaintWindow[] {
   const ids = new Set(subtreeIds(t, id));
@@ -234,7 +257,7 @@ export async function buildComponentView(scope: string | null, segs: string[]): 
   const status = effective(t, id);
   const kids = t.kids.get(id) ?? [];
   const upMemo = new Map<string, string[]>(); // derived-uptime cache for this build
-  const scopeMaint = subtreeMaintenance(t, id);
+  const scopeMaint = [...recurringMaintenance(), ...subtreeMaintenance(t, id)];
 
   const children: ViewChild[] = kids.map((c) => ({
     id: c.id,

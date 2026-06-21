@@ -10,6 +10,7 @@ import { maintenance } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { getResource } from '@/lib/admin/resources';
 import { componentOptions } from '@/lib/admin/view';
+import { setSessionsSiteAlert } from '@/lib/sessions-alert';
 import { navCounts, propertyOptions } from '@/lib/admin/nav';
 
 const { id } = Astro.params;
@@ -22,7 +23,12 @@ if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const action = form.get('_action')?.toString();
   if (action === 'delete') {
+    const [row] = await db.select().from(maintenance).where(eq(maintenance.id, id));
     await db.delete(maintenance).where(eq(maintenance.id, id));
+    // Cancelling an emergency clears the Sessions.gg storefront banner too.
+    if (row && (row as { kind?: string }).kind === 'emergency') {
+      await setSessionsSiteAlert({ active: false });
+    }
     return Astro.redirect('/admin/maintenance');
   }
   const title = form.get('title')?.toString() ?? '';
