@@ -61,10 +61,10 @@ const ids = T.map((r) => r[0]);
 // label/source that doesn't exist yet (e.g. fresh live wipe) is a 0-row no-op.
 const REMAP = [
   // Resolver dep-health → grouped upstream-API nodes under the Resolver API.
-  ['dep:mojang', 'mc-dep-mojang'], ['dep:mojang-cdn', 'mc-dep-mojang'],
+  ['dep:mojang', 'mc-dep-mojang'], ['dep:mojang-cdn', 'mc-dep-mojang'], ['dep:mojang-profile', 'mc-dep-mojang'],
   ['dep:paper', 'mc-dep-paper'], ['dep:paper-api', 'mc-dep-paper'],
   ['dep:modrinth', 'mc-dep-modrinth'], ['dep:modrinth-cdn', 'mc-dep-modrinth'],
-  ['dep:geyser', 'mc-dep-geyser'], ['dep:geyser-docs', 'mc-dep-geyser'], ['dep:geyser-github', 'mc-dep-geyser'],
+  ['dep:geyser', 'mc-dep-geyser'], ['dep:geyser-docs', 'mc-dep-geyser'], ['dep:geyser-github', 'mc-dep-geyser'], ['dep:geyser-uuid', 'mc-dep-geyser'],
   ['dep:fabric', 'mc-dep-fabric'], ['dep:hangar', 'mc-dep-hangar'],
   // Probes follow the new homes.
   ['integrations/blackbox/mc_java', 'minecraft'],
