@@ -68,9 +68,9 @@ export function worstStatus(services: Service[]): ServiceStatus {
 /** Human-readable label for a service status. */
 export function statusLabel(s: ServiceStatus): string {
   switch (s) {
-    case 'operational':  return 'OPERATIONAL';
+    case 'operational':  return 'UP';
     case 'degraded':     return 'DEGRADED';
-    case 'outage':       return 'OUTAGE';
+    case 'outage':       return 'DOWN';
     case 'maintenance':  return 'MAINTENANCE';
   }
 }

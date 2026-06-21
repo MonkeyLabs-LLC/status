@@ -31,7 +31,7 @@ function affectedHeadline(): string {
 }
 
 const headline = view.isRoot
-  ? (ok ? 'All systems operational' : affectedHeadline())
+  ? (ok ? 'All systems up' : affectedHeadline())
   : `${view.nodeName} — ${STATUS_LABEL[view.status]}`;
 
 // "Degraded HOW" — name the worst thing below (severity + where) so the rolled-up
@@ -45,7 +45,7 @@ const subtitle = !ok
   ? worstInc
     ? `${severityLabel(worstInc.severity)} in ${worstInc.affectedName ?? view.nodeName}${moreCount > 0 ? ` · +${moreCount} more` : ''}`
     : STATUS_LABEL[view.status]
-  : view.level === 'service' ? (view.nodeTag ?? '') : 'All services operational';
+  : view.level === 'service' ? (view.nodeTag ?? '') : 'All services up';
 const inlineSingle = view.children.length === 0 && view.attachedIncidents.length === 1;
 // List every incident in the subtree (worst-first, built in components.ts) — the
 // quick "what's wrong below me / jump to it" list, surfaced at parent scopes too.
@@ -81,7 +81,7 @@ const DAY_COLOR: Record<string, string> = {
 <div class="seclbl">Status</div>
 <div class="row static" style={`--leg:${ok ? 'var(--ok)' : STATUS_COLOR[view.status]}`}>
   <div>
-    <div class="nm">{ok ? 'Operational' : STATUS_LABEL[view.status]}</div>
+    <div class="nm">{ok ? 'Up' : STATUS_LABEL[view.status]}</div>
     <div class="kd">{view.uptimePct}% uptime · 90 days</div>
   </div>
   <span class="st" style={`color:${ok ? 'var(--ok)' : STATUS_COLOR[view.status]}`}>{STATUS_LABEL[view.status]}</span>
