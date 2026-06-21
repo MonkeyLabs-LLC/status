@@ -49,14 +49,8 @@ const T = [
   ['mc-dep-modrinth','minecraft', 'Modrinth', 'service',  'mods · cdn',                  'ok', 4, null, null],
   ['mc-dep-fabric',  'minecraft', 'Fabric',   'service',  'modded',                      'ok', 5, null, null],
 
-  // ── Banana Labs — open-source repos (no auth product yet: identity + bananaauth dropped) ──
-  ['bananagine', 'bananalabs', 'bananagine', 'service', 'repo · runtime', 'ok', 0, null, null],
-  ['peel',       'bananalabs', 'peel',       'service', 'repo',           'ok', 1, null, null],
-  ['pulp',       'bananalabs', 'pulp',       'service', 'repo · runtime', 'ok', 2, null, null],
-  ['potassium',  'bananalabs', 'potassium',  'service', 'repo · lib',     'ok', 3, null, null],
-  ['fiber',      'bananalabs', 'fiber',      'service', 'repo · sdk',     'ok', 4, null, null],
-  ['hand',       'bananalabs', 'hand',       'service', 'repo · party',   'ok', 5, null, null],
-  ['docs',       'bananalabs', 'docs',       'service', 'site',           'ok', 6, null, null],
+  // ── Banana Labs — just Bananadoro for now (the app on bananalabs.cloud) ──
+  ['bananadoro', 'bananalabs', 'Bananadoro', 'service', 'bananadoro.bananalabs.cloud', 'ok', 0, null, null],
 ];
 
 const ids = T.map((r) => r[0]);
