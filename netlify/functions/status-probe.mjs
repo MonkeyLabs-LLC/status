@@ -45,10 +45,12 @@ export default async function handler() {
   if (!secret) return new Response('UPTIME_HOOK_SECRET not set', { status: 503 });
   const base = (process.env.PUBLIC_STATUS_URL || 'https://status.monkeylabs.gg').replace(/\/$/, '');
 
-  const probes = [];
-  for (const t of TARGETS) {
-    probes.push({ component: t.component, up: await probe(t.url) });
-  }
+  // Probe all targets concurrently — runtime stays ~one slow probe regardless of
+  // how many services you add, so this scales to a long TARGETS list without
+  // hitting the function time limit. (Cost is unchanged: still 1 run + 1 batch POST.)
+  const probes = await Promise.all(
+    TARGETS.map(async (t) => ({ component: t.component, up: await probe(t.url) })),
+  );
 
   try {
     const res = await fetch(`${base}/api/v1/ingest/status-probe?key=${encodeURIComponent(secret)}`, {
