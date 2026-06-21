@@ -32,12 +32,18 @@ const TARGETS = [
 ];
 
 async function probe(url) {
-  try {
-    const res = await fetch(url, { method: 'GET', redirect: 'follow', signal: AbortSignal.timeout(8000) });
-    return res.ok || (res.status >= 200 && res.status < 400);
-  } catch {
-    return false;
+  // Two attempts with a short gap: a single transient slow/errored fetch (a cold
+  // edge, a momentary network blip) must NOT register as a real outage. Report
+  // down only when BOTH the initial GET and one retry fail. This kills false
+  // downs at the source; the engine's watch/dwell debounce is the second layer.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, { method: 'GET', redirect: 'follow', signal: AbortSignal.timeout(10000) });
+      if (res.ok || (res.status >= 200 && res.status < 400)) return true;
+    } catch { /* fall through to the retry */ }
+    if (attempt === 0) await new Promise((r) => setTimeout(r, 1500));
   }
+  return false;
 }
 
 export default async function handler() {

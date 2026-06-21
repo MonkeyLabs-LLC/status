@@ -177,7 +177,7 @@ function barTitle(dayStatus: string, idx: number, len: number): string {
     flex: 0 0 auto;
     width: 9px;
     border-radius: 2px;
-    box-shadow: 0 0 0 1px var(--bg, rgba(0,0,0,0.15));
+    box-shadow: 0 0 0 1px var(--paper, rgba(0,0,0,0.15));
   }
   .bars span.today::after {
     content: "";
@@ -194,18 +194,20 @@ function barTitle(dayStatus: string, idx: number, len: number): string {
   }
   /* Tap-to-reveal: `title` only shows on hover (desktop). On touch, tapping the strip
      fills this caption with the nearest day's date + status. */
-  .upwrap { position: relative; } /* anchor for the absolute caption */
-  /* Caption is OUT OF FLOW (absolute) so showing it never reflows the bars (was the
-     "cells get screwy" jitter). Wraps instead of overflowing; sits just below the strip. */
+  .upwrap { position: relative; flex-wrap: wrap; }
+  /* Caption sits on its OWN wrapped line BELOW the bars (flex-basis:100%), so it
+     never pushes the bar cells sideways (the old "cells get screwy" jitter) and is
+     never clipped at the card edge (the old absolute-positioning cut-off). The card
+     simply grows down when it appears. */
   .barcap {
-    position: absolute; top: 100%; left: 0; right: 0; margin-top: 3px; z-index: 5;
+    flex-basis: 100%; margin-top: 6px;
     font-family: var(--mono); font-size: 11px; line-height: 1.35; color: var(--muted);
-    white-space: normal; overflow-wrap: anywhere; background: var(--sf, #fff);
+    white-space: normal; overflow-wrap: anywhere;
   }
   .barcap:empty { display: none; }
   .bars { cursor: pointer; touch-action: none; } /* hold-drag magnifies instead of scrolling */
   .daysel { margin-top: 14px; } /* day-selected incident card(s) */
-  .bars span.peek { outline: 2px solid var(--fg, #111); outline-offset: 1px; } /* real bar under the pointer */
+  .bars span.peek { outline: 2px solid var(--ink, #111); outline-offset: 1px; } /* real bar under the pointer */
   @keyframes marquee-stripes {
     from { background-position: 0 0; }
     to   { background-position: 8.49px 0; }
@@ -220,13 +222,13 @@ function barTitle(dayStatus: string, idx: number, len: number): string {
   .bar-loupe {
     position: fixed; z-index: 9999; display: none; pointer-events: none;
     max-width: 280px;
-    background: var(--sf, #fff); border: 1px solid var(--line2, rgba(0,0,0,.18));
-    border-radius: 10px; padding: 8px 10px; box-shadow: 0 10px 30px rgba(0,0,0,.22);
+    background: var(--paper, #fff); border: 1px solid var(--line2, rgba(0,0,0,.18));
+    border-radius: 10px; padding: 8px 10px; box-shadow: 0 10px 30px rgba(0,0,0,.35);
   }
   .bar-loupe .loupe-bars { display: flex; gap: 3px; height: 42px; align-items: stretch; }
   .bar-loupe .loupe-bars span { width: 11px; border-radius: 2px; }
-  .bar-loupe .loupe-bars span.sel { outline: 2px solid var(--fg, #111); outline-offset: 2px; }
-  .bar-loupe .loupe-cap { margin-top: 8px; font-family: var(--mono, monospace); font-size: 12px; text-align: center; color: var(--fg, #111); white-space: normal; overflow-wrap: anywhere; }
+  .bar-loupe .loupe-bars span.sel { outline: 2px solid var(--ink, #111); outline-offset: 2px; }
+  .bar-loupe .loupe-cap { margin-top: 8px; font-family: var(--mono, monospace); font-size: 12px; text-align: center; color: var(--ink, #111); white-space: normal; overflow-wrap: anywhere; }
   .bar-loupe .loupe-cap a { color: var(--major, #c0392b); }
 </style>
 
