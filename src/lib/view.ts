@@ -58,7 +58,7 @@ export interface ScopeView {
   isRoot: boolean;
   /** Display name of the current node (product or service name; '' at umbrella root). */
   nodeName: string;
-  /** The node's own descriptive tag (e.g. 'bananagine', 'api.sessions.gg · evolution')
+  /** The node's own descriptive tag (e.g. 'web', 'api.example.com · backend')
    *  — shown in the banner instead of a (duplicate) breadcrumb. */
   nodeTag?: string;
   /** 'umbrella' | 'product' | 'service' — what level we're at. */

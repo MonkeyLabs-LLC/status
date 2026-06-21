@@ -1,6 +1,6 @@
-// Resend magic-link email — TUI dialect matching Sessions/Evolution emails.
-// Mono brand header, bordered card, accent button. See Evolution's
-// email_template.go for the canonical pattern.
+// Resend magic-link email — mono brand header, bordered card, accent button.
+// From-address + brand come from pulse.config / env (RESEND_FROM_*).
+// Generic transactional email styling.
 
 import { COMPANY, SITE_TITLE, STATUS_DOMAIN } from '@/pulse.config';
 

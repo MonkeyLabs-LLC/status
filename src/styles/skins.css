@@ -1,13 +1,13 @@
 /* ============================================================================
  * Public status skin — ONE design, scope-driven branding.
- * Ported from the status.html mock onto the white Monkey Labs base.
+ * Ported from the status.html mock onto the white base.
  *
- *   <html data-scope="monkeylabs|sessions|bananalabs">  → accent + wordmark + logo
+ *   <html data-scope="<scope-id>">  → accent + wordmark + logo
  *   <html data-theme="dark">                            → light/dark (persisted)
  *
  * Brand differs ONLY by --ac + wordmark + logo (cheap token swap, not 3 skins).
  * Status is carried by the locked palette + a quiet-when-healthy capsule "leg".
- * White base + isometric hatch keeps it a sibling of monkeylabs.gg. All tokens
+ * White base + isometric hatch keeps it a sibling of the brand site. All tokens
  * are scoped to body[data-skinned] so admin/Default pages are untouched.
  * ========================================================================== */
 
