@@ -101,29 +101,40 @@ export async function snapshotAllOpenIncidents(): Promise<Map<string, IncidentSn
  * Best-effort: notification failure is logged, never thrown, so it can never
  * break the ingest response or the engine's truth.
  */
+// Only CONFIRMED-impact incidents email subscribers. MINOR (a single unconfirmed
+// vantage, or a non-critical degradation) is surfaced on the page but stays quiet
+// — "minor never pages." Crossing INTO moderate/major notifies as 'opened';
+// dropping below it (resolved, or downgraded to minor) reads as 'resolved'.
+const NOTIFY_SEVERITIES = new Set(['moderate', 'major']);
+function notifiable(snap: IncidentSnapshot): boolean {
+  return !!snap.incidentId && NOTIFY_SEVERITIES.has(snap.severity ?? '');
+}
+
 export async function notifyForComponent(componentId: string, before: IncidentSnapshot): Promise<void> {
   try {
     const after = await snapshotComponent(componentId);
+    const wasNotable = notifiable(before);
+    const isNotable = notifiable(after);
 
-    // Opened: there was no open incident, now there is one.
-    if (!before.incidentId && after.incidentId) {
-      await notifyIncident(after.incidentId, 'opened');
+    // Crossed INTO notable (brand-new, or a minor escalated to moderate/major).
+    if (!wasNotable && isNotable) {
+      await notifyIncident(after.incidentId!, 'opened');
       return;
     }
 
-    // Resolved: there was an open incident, now there is not.
-    if (before.incidentId && !after.incidentId) {
-      await notifyIncident(before.incidentId, 'resolved');
+    // Dropped BELOW notable (resolved, or downgraded to a quiet minor).
+    if (wasNotable && !isNotable) {
+      await notifyIncident(before.incidentId!, 'resolved');
       return;
     }
 
-    // Same incident still open: only narrate a real severity change.
+    // Both notable, same incident: only narrate a real severity change (moderate <-> major).
     if (
-      before.incidentId && after.incidentId &&
+      wasNotable && isNotable &&
       before.incidentId === after.incidentId &&
       before.severity !== after.severity
     ) {
-      await notifyIncident(after.incidentId, 'update');
+      await notifyIncident(after.incidentId!, 'update');
     }
   } catch (e) {
     console.error('[notify] notifyForComponent failed', e);

@@ -15,7 +15,7 @@ vi.mock('@/db', () => ({
   },
 }));
 
-import { evaluateComponent, evaluationToStatus, MANUAL_OK_GRACE_SECONDS, sameObservation, resolveExpiry, refreshExpiry, confidenceToStatus } from './quorum';
+import { evaluateComponent, evaluationToStatus, severityFor, MANUAL_OK_GRACE_SECONDS, sameObservation, resolveExpiry, refreshExpiry, confidenceToStatus } from './quorum';
 
 const NOW = new Date('2026-06-03T12:00:00Z');
 
@@ -225,6 +225,22 @@ describe('evaluationToStatus mapping', () => {
     expect(evaluationToStatus({ state: 'declared', level: 'degraded' } as any)).toBe('degraded');
     expect(evaluationToStatus({ state: 'watch', level: null } as any)).toBe('operational');
     expect(evaluationToStatus({ state: 'ok', level: null } as any)).toBe('operational');
+  });
+});
+
+describe('severityFor — criticality-aware 3-tier severity (status is unchanged)', () => {
+  const ev = (state: string, level: string | null) => ({ state, level } as any);
+  it('confirmed DOWN: critical => major, non-critical => moderate', () => {
+    expect(severityFor(ev('declared', 'major'), true)).toBe('major');
+    expect(severityFor(ev('declared', 'major'), false)).toBe('moderate');
+  });
+  it('confirmed DEGRADED: critical => moderate, non-critical => minor', () => {
+    expect(severityFor(ev('declared', 'degraded'), true)).toBe('moderate');
+    expect(severityFor(ev('declared', 'degraded'), false)).toBe('minor');
+  });
+  it('single UNCONFIRMED vantage (watch) => minor regardless of criticality', () => {
+    expect(severityFor(ev('watch', null), true)).toBe('minor');
+    expect(severityFor(ev('watch', null), false)).toBe('minor');
   });
 });
 
