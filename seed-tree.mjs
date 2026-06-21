@@ -13,7 +13,11 @@
 import postgres from 'postgres';
 const sql = postgres(process.env.DATABASE_URL, { ssl: (process.env.DATABASE_URL || '').includes('localhost') ? false : 'require' });
 
-const allOk = JSON.stringify(Array.from({ length: 90 }, () => 'ok'));
+// New components start with NO uptime history (honest — real {date,status} days
+// accrue from the ingest adapters). The renderer shows unrecorded days as "No data",
+// never invented "ok". (Existing rows are untouched: the upsert below doesn't set
+// uptime_90d on conflict.)
+const allOk = JSON.stringify([]);
 
 // [id, parent, name, kind, tag(display), status, sort, brand, domain]
 const T = [
