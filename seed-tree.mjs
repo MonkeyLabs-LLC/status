@@ -46,10 +46,14 @@ const T = [
   // Game Services → Minecraft → the upstream APIs (no Resolver-API wrapper).
   ['gameserver', 'backend',    'Game Services', 'service', 'apis', 'ok', 3, null, null],
   ['minecraft',  'gameserver', 'Minecraft',     'service', 'game', 'ok', 0, null, null],
-  ['mc-dep-mojang',  'minecraft', 'Mojang',   'critical', 'auth · manifest · whitelist', 'ok', 0, null, null],
-  ['mc-dep-paper',   'minecraft', 'Paper',    'critical', 'server + plugin api',         'ok', 1, null, null],
-  ['mc-dep-geyser',  'minecraft', 'Geyser',   'critical', 'bedrock · version check',     'ok', 2, null, null],
-  ['mc-dep-hangar',  'minecraft', 'Hangar',   'critical', 'plugin index (geyser)',       'ok', 3, null, null],
+  // Each dep is ONE engine's upstream (vanilla / Java / Bedrock / plugins). Any
+  // single one down breaks only THAT engine, not all of Minecraft — so they are
+  // non-critical: a dep outage DEGRADES Minecraft (and Sessions), never blacks it
+  // out. Minecraft only reads fully down if its own probe declares down.
+  ['mc-dep-mojang',  'minecraft', 'Mojang',   'service',  'auth · manifest · whitelist', 'ok', 0, null, null],
+  ['mc-dep-paper',   'minecraft', 'Paper',    'service',  'server + plugin api',         'ok', 1, null, null],
+  ['mc-dep-geyser',  'minecraft', 'Geyser',   'service',  'bedrock · version check',     'ok', 2, null, null],
+  ['mc-dep-hangar',  'minecraft', 'Hangar',   'service',  'plugin index (geyser)',       'ok', 3, null, null],
   ['mc-dep-modrinth','minecraft', 'Modrinth', 'service',  'mods · cdn',                  'ok', 4, null, null],
   ['mc-dep-fabric',  'minecraft', 'Fabric',   'service',  'modded',                      'ok', 5, null, null],
 

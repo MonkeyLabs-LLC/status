@@ -86,6 +86,16 @@ export const MANUAL_OK_GRACE_SECONDS = 3600;
 export const OPEN_DWELL_SECONDS = 180;
 export const RECOVERY_HOLD_SECONDS = 300;
 
+/**
+ * Recovery hold for NON-critical components (external dependencies). A flaky
+ * upstream — Mojang/Microsoft limping for hours, going green for a few minutes
+ * between breaks — should coalesce into ONE incident spanning the bad period,
+ * not mint a fresh "outage" card every time it blips back. Critical first-party
+ * components keep the snappy 5-min hold (RECOVERY_HOLD_SECONDS) so a genuine
+ * recovery is reported promptly; a dependency just isn't worth that churn.
+ */
+export const DEP_RECOVERY_HOLD_SECONDS = 1800;
+
 /** One source's current read on a component. */
 export interface SourceRead {
   sourceId: string;
@@ -486,7 +496,10 @@ export async function reconcileIncident(ev: ComponentEvaluation, now = new Date(
       // hold window. A flapping component coalesces into ONE incident spanning
       // the flappy period instead of a fresh 0-minute card per up/down cycle.
       const lastNonOk = await lastNonOkAt(ev.componentId);
-      if (lastNonOk && (now.getTime() - lastNonOk.getTime()) < RECOVERY_HOLD_SECONDS * 1000) {
+      // Critical components resolve snappily; non-critical deps coalesce lazily
+      // so a flapping upstream stays one incident (see DEP_RECOVERY_HOLD_SECONDS).
+      const holdSeconds = critical ? RECOVERY_HOLD_SECONDS : DEP_RECOVERY_HOLD_SECONDS;
+      if (lastNonOk && (now.getTime() - lastNonOk.getTime()) < holdSeconds * 1000) {
         return; // still inside the recovery window — hold the incident open
       }
       await db.update(incidents)
