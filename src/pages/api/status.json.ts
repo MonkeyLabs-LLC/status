@@ -51,7 +51,7 @@ export const GET: APIRoute = async ({ locals }) => {
         // hits (UptimeRobot, badges, real consumers) are served from the edge,
         // NOT a fresh function invocation each time — the meter that blew the
         // free-tier cap and 503'd the site (2026-06-18). max-age covers browsers.
-        'Cache-Control': 'public, max-age=30, s-maxage=30, stale-while-revalidate=60',
+        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
         'Netlify-CDN-Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
         'Access-Control-Allow-Origin': '*',
       },

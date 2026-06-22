@@ -1,0 +1,38 @@
+# traefik static config — status box.
+# Mirrors the api.sessions.gg setup: docker provider + websecure entrypoint +
+# a Let's Encrypt resolver using the Cloudflare DNS-01 challenge (CF_API_EMAIL +
+# CF_DNS_API_TOKEN supplied via compose environment).
+
+entryPoints:
+  web:
+    address: ":80"
+    # Redirect all plain HTTP to HTTPS.
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    # Only expose containers that opt in with traefik.enable=true.
+    exposedByDefault: false
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "admin@monkeylabs.gg"
+      storage: /acme/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
+
+# Set to true only while debugging cert issuance against the LE staging CA.
+# caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+
+log:
+  level: INFO

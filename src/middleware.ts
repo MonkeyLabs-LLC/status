@@ -2,6 +2,27 @@ import { defineMiddleware } from 'astro:middleware';
 import { resolveScope } from './lib/scope';
 import { verifyCookie, COOKIE_NAME } from './lib/admin-auth';
 import { SCOPES, UMBRELLA_ID } from './pulse.config';
+import { startScheduler } from './lib/scheduler';
+
+// Internal scheduler boot — no-op unless STATUS_ADAPTER === 'node' (self-host).
+// Lives here because middleware is the one module guaranteed to load in the
+// running SSR server process; idempotent so it only ever starts the timers once.
+startScheduler();
+
+// Paths that must NEVER be edge-cached: mutations, admin, ingest, sweep,
+// subscribe/unsubscribe. Everything else (public pages + status.json) is
+// cacheable so Cloudflare absorbs an outage-time refresh spike.
+function isNoStorePath(path: string): boolean {
+  return (
+    path.startsWith('/admin') ||
+    path.startsWith('/api/admin') ||
+    path.startsWith('/api/v1/admin') ||
+    path.startsWith('/api/v1/ingest') ||
+    path.startsWith('/api/v1/sweep') ||
+    path.startsWith('/api/subscribe') ||
+    path.startsWith('/api/unsubscribe')
+  );
+}
 
 export const onRequest = defineMiddleware(async ({ request, locals, url, cookies, redirect }, next) => {
   const host = request.headers.get('host') || 'localhost';
@@ -50,10 +71,25 @@ export const onRequest = defineMiddleware(async ({ request, locals, url, cookies
     }
 
     (locals as any).adminEmail = email;
-    return next();
+    const adminRes = await next();
+    adminRes.headers.set('Cache-Control', 'no-store');
+    return adminRes;
   }
 
   // Node routing is relative to the scope's landing root (resolved in
   // lib/components from locals.scope), so no host-based path rewrite is needed.
-  return next();
+  const res = await next();
+
+  // Cache-Control policy (per SELFHOST-MIGRATION.md "Cache headers to set"):
+  //  - mutations/admin/ingest/sweep/subscribe → no-store (never cache).
+  //  - everything else (public page + status.json) → CDN-cacheable so Cloudflare
+  //    absorbs an outage-time refresh spike with ≤30s update lag.
+  // status.json sets its own (richer, with the 503 fail-closed branch) header, so
+  // don't clobber an already-set Cache-Control.
+  if (isNoStorePath(path)) {
+    res.headers.set('Cache-Control', 'no-store');
+  } else if (!res.headers.has('Cache-Control')) {
+    res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+  }
+  return res;
 });

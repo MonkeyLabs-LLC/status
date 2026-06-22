@@ -1,0 +1,83 @@
+# Status page — self-host compose (separate small box, NOT the prod VPS).
+#
+# Mirrors the api.sessions.gg pattern: traefik v3.2 reverse-proxy with
+# Let's Encrypt TLS (Cloudflare DNS-01 challenge), Host-routing the three status
+# domains to ONE Astro @astrojs/node container. Cloudflare sits in front as a
+# removable CDN/edge (caching + edge TLS + origin hiding) — see SELFHOST-MIGRATION.md.
+#
+# Independence: this box must be SEPARATE from the prod VPS / game box (a status
+# page must not depend on the infra it reports on).
+#
+# Layout at ~/status/:
+#   docker-compose.yml, .env (copy from .env.example), traefik/{traefik.yml,acme.json}
+#   The status image builds from the repo (build context = the status repo root).
+#
+# Bring up:  docker compose up -d --build
+
+services:
+  # --- Reverse proxy + TLS via Cloudflare DNS-01 (mirrors the VPS traefik) ---
+  traefik:
+    image: traefik:v3.2
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - CF_API_EMAIL=${CF_API_EMAIL}
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/acme.json:/acme/acme.json
+    restart: unless-stopped
+
+  # --- Status app: Astro @astrojs/node standalone server (single instance) ---
+  status:
+    build:
+      # Build context = the status repo root (two levels up from this compose,
+      # i.e. the repo's Dockerfile). On the box, check out the repo and run
+      # `docker compose -f deploy/status/docker-compose.yml up -d --build` from
+      # the repo root, or copy the compose+traefik next to the repo and adjust.
+      context: ../..
+      dockerfile: Dockerfile
+    healthcheck:
+      # status.json fails-closed (503) on DB loss but still answers HTTP 200/503,
+      # so a plain reachability probe on the public root is the liveness signal.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/status.json',{headers:{host:'status.monkeylabs.gg'}}).then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    expose:
+      - "8080"
+    labels:
+      - "traefik.enable=true"
+      # One router, all three Host()s → the single status container.
+      - "traefik.http.routers.status.rule=Host(`status.sessions.gg`) || Host(`status.monkeylabs.gg`) || Host(`status.bananalabs.gg`)"
+      - "traefik.http.routers.status.entrypoints=websecure"
+      - "traefik.http.routers.status.tls=true"
+      - "traefik.http.routers.status.tls.certResolver=letsencrypt"
+      - "traefik.http.routers.status.tls.domains[0].main=status.sessions.gg"
+      - "traefik.http.routers.status.tls.domains[1].main=status.monkeylabs.gg"
+      - "traefik.http.routers.status.tls.domains[2].main=status.bananalabs.gg"
+      - "traefik.http.services.status.loadbalancer.server.port=8080"
+    environment:
+      - STATUS_ADAPTER=node
+      - HOST=0.0.0.0
+      - PORT=8080
+      # Same Crunchy status-prod DB — no DB migration.
+      - DATABASE_URL=${DATABASE_URL}
+      # Ingest / sweep / poll shared secrets (the internal scheduler reuses these).
+      - UPTIME_HOOK_SECRET=${UPTIME_HOOK_SECRET}
+      - GRAFANA_HOOK_SECRET=${GRAFANA_HOOK_SECRET}
+      - UPTIMEROBOT_API_KEY=${UPTIMEROBOT_API_KEY}
+      # Admin auth + magic-link email.
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_SESSION_SECRET=${ADMIN_SESSION_SECRET}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL}
+      - RESEND_FROM_NAME=${RESEND_FROM_NAME}
+      # Optional internal-mirror wiring (Evolution site-alert), all have fallbacks.
+      - INTERNAL_SECRET=${INTERNAL_SECRET}
+      - PUBLIC_STATUS_URL=${PUBLIC_STATUS_URL}
+      - PUBLIC_EVOLUTION_URL=${PUBLIC_EVOLUTION_URL}
+      - EVOLUTION_INTERNAL_URL=${EVOLUTION_INTERNAL_URL}
+    restart: unless-stopped

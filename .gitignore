@@ -42,3 +42,6 @@ pnpm-lock.yaml
 !/seed-tree.mjs
 # local one-off tree backups
 .tree-backup-*.json
+
+# self-host traefik LE cert store (secret material, created on the box)
+deploy/status/traefik/acme.json
