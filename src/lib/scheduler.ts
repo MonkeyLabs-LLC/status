@@ -21,6 +21,8 @@
  * starts two sets of timers in one process.
  */
 
+import { STATUS_DOMAIN } from '@/pulse.config';
+
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5 min
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 min
 // Small stagger so the two jobs don't fire on the exact same tick.
@@ -36,7 +38,7 @@ function selfOrigin(): string {
 
 // A real, known Host so middleware resolveScope() returns a defined scope.
 function selfHost(): string {
-  return 'status.monkeylabs.gg';
+  return STATUS_DOMAIN;
 }
 
 async function runSweep(): Promise<void> {

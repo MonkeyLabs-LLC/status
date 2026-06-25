@@ -27,12 +27,13 @@
  * are intentional one-shots.
  */
 import { db } from '@/db';
-import { incidents, incidentTimeline, components, maintenance } from '@/db/schema';
-import { eq, ne, desc, isNull } from 'drizzle-orm';
+import { incidents, incidentTimeline, maintenance } from '@/db/schema';
+import { eq, ne, desc } from 'drizzle-orm';
 import { sendIncidentEmail } from './email';
 import { listConfirmedSubscribers, buildUnsubscribeUrl } from './subscribers';
 import { UMBRELLA_ID, COMPANY, STATUS_DOMAIN, scopeBrand } from '@/pulse.config';
 import { openIncidentFor } from './quorum';
+import { productAncestorId } from '@/lib/components';
 
 /** What kind of lifecycle event we are narrating to subscribers. */
 export type NotifyKind = 'opened' | 'update' | 'resolved';
@@ -277,20 +278,8 @@ async function latestUpdateBody(incidentId: string): Promise<string | null> {
  */
 async function resolveScopeName(affects: string[]): Promise<string> {
   if (!affects || affects.length === 0) return COMPANY;
-  const rows = await db.select({ id: components.id, parentId: components.parentId, kind: components.kind })
-    .from(components).where(isNull(components.archivedAt));
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  let cur = byId.get(affects[0]);
-  let product: string | null = null;
-  let orgFallback: string | null = null;
-  while (cur) {
-    if (cur.kind === 'product') { product = cur.id; break; }
-    if (cur.kind === 'organization') orgFallback = cur.id;
-    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
-  }
-  const key = product ?? orgFallback ?? UMBRELLA_ID;
+  const key = await productAncestorId(affects[0]);
   if (key === UMBRELLA_ID) return COMPANY;
-  // Resolve the display name through the seam, never re-derive it here.
   return scopeBrand(key).wordmark;
 }
 

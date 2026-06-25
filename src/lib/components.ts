@@ -9,7 +9,7 @@
  */
 import { db } from '@/db';
 import { components, maintenance } from '@/db/schema';
-import { isNull, asc, eq, gte } from 'drizzle-orm';
+import { isNull, asc, eq, gte, and } from 'drizzle-orm';
 import type { ServiceStatus, Incident } from './types';
 import { statusToState } from './types';
 import { derivedComponentStatuses, evaluateComponent, openIncidentFor } from './quorum';
@@ -491,7 +491,15 @@ export async function isLeafComponent(id: string): Promise<boolean> {
   const rows = await db.select({ kind: components.kind, archivedAt: components.archivedAt })
     .from(components).where(eq(components.id, id));
   const r = rows[0];
-  return !!r && r.archivedAt == null && (r.kind === 'service' || r.kind === 'host');
+  if (!r || r.archivedAt != null) return false;
+  if (r.kind === 'service' || r.kind === 'host') return true;
+  if (r.kind === 'critical') {
+    // A critical node with no live children is effectively a leaf and may be declared on.
+    const kids = await db.select({ id: components.id }).from(components)
+      .where(and(eq(components.parentId, id), isNull(components.archivedAt)));
+    return kids.length === 0;
+  }
+  return false;
 }
 
 /**
@@ -588,6 +596,36 @@ export async function productAncestorId(componentId: string): Promise<string> {
     cur = cur.parentId ? byId.get(cur.parentId) : undefined;
   }
   return orgFallback ?? UMBRELLA_ID;
+}
+
+/**
+ * Lightweight component adjacency map (id / parentId / kind, non-archived).
+ * Shared by product-scoping helpers in db-incidents, db-maintenance, and notify.
+ */
+export async function loadComponentTree(): Promise<Map<string, { id: string; parentId: string | null; kind: string }>> {
+  const rows = await db.select({ id: components.id, parentId: components.parentId, kind: components.kind })
+    .from(components).where(isNull(components.archivedAt));
+  return new Map(rows.map((r) => [r.id, r]));
+}
+
+/** All component ids in a product's subtree (the product node + every descendant). */
+export async function serviceIdsForProduct(product: string): Promise<string[]> {
+  const byId = await loadComponentTree();
+  const kids = new Map<string, string[]>();
+  for (const r of byId.values()) {
+    if (!r.parentId) continue;
+    (kids.get(r.parentId) ?? kids.set(r.parentId, []).get(r.parentId)!).push(r.id);
+  }
+  const out: string[] = [];
+  const walk = (id: string) => { out.push(id); for (const k of kids.get(id) ?? []) walk(k); };
+  if (byId.has(product)) walk(product);
+  return out;
+}
+
+/** Resolve the product id for an incident / maintenance window by walking the first affected component up the tree. */
+export async function resolveProduct(affects: string[]): Promise<string> {
+  if (affects.length === 0) return UMBRELLA_ID;
+  return productAncestorId(affects[0]);
 }
 
 /**
