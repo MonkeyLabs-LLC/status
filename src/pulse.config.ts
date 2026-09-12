@@ -15,34 +15,24 @@
  * package — this file is the instance's only code.
  */
 
-export interface ScopeConfig {
-  /** Scope id — also the id of this scope's landing-root component. */
-  id: string;
-  /** Host header that lands on this scope. */
-  host: string;
-  /** The umbrella/root scope (resolveScope returns null for it publicly). */
-  umbrella?: boolean;
-  wordmark: string;
-  /** Logo served from /public/brand. */
-  logo: string;
-}
+import { STATUS_PROFILE, type StatusScopeProfile } from './status.profile';
 
-export const COMPANY = 'Monkey Labs';
-export const COMPANY_LEGAL = '© 2026 Monkey Labs LLC';
-export const FOOTER_DOMAINS = ['monkeylabs.gg', 'sessions.gg', 'bananalabs.gg'];
+export type ScopeConfig = StatusScopeProfile;
+
+export { STATUS_PROFILE };
+
+export const COMPANY = STATUS_PROFILE.branding.company;
+export const COMPANY_LEGAL = STATUS_PROFILE.branding.legal;
+export const FOOTER_DOMAINS = [...STATUS_PROFILE.branding.footerDomains];
 
 /** Feed/page metadata, derived from the spaced company name (NOT a second source). */
 export const SITE_TITLE = `${COMPANY} Status`;
 export const SITE_DESCRIPTION = `Real-time status and incident history for ${COMPANY} services.`;
-export const SUPPORT_EMAIL = 'hello@monkeylabs.gg';
+export const SUPPORT_EMAIL = STATUS_PROFILE.branding.supportEmail;
 /** localStorage key for the public page's light/dark preference. */
-export const THEME_STORAGE_KEY = 'ml-status-theme';
+export const THEME_STORAGE_KEY = STATUS_PROFILE.branding.themeStorageKey;
 
-export const SCOPES: ScopeConfig[] = [
-  { id: 'monkeylabs', host: 'status.monkeylabs.gg', umbrella: true, wordmark: 'Monkey Labs', logo: '/brand/monkeylabs.png' },
-  { id: 'sessions',   host: 'status.sessions.gg',   wordmark: 'Sessions',    logo: '/brand/sessions.png' },
-  { id: 'bananalabs', host: 'status.bananalabs.gg', wordmark: 'Banana Labs', logo: '/brand/bananalabs.png' },
-];
+export const SCOPES: ScopeConfig[] = STATUS_PROFILE.branding.scopes.map((scope) => ({ ...scope }));
 
 export const UMBRELLA_ID = SCOPES.find((s) => s.umbrella)!.id;
 /** The umbrella status host (for absolute URLs in feeds / permalinks). */

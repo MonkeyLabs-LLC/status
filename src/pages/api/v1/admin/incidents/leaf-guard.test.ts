@@ -32,6 +32,9 @@ vi.mock('@/lib/quorum', () => ({
   recordManualOverride,
   openIncidentFor: vi.fn(async () => ({ id: 'inc1' })),
 }));
+vi.mock('@/lib/pulp-bridge', () => ({
+  pulpOwnerRouteFamilyConfigured: vi.fn(() => false),
+}));
 vi.mock('@/db', () => ({
   db: { select: () => ({ from: () => ({ orderBy: () => ({ limit: async () => [] }) }) }) },
 }));

@@ -6,8 +6,9 @@
 import { db } from '@/db';
 import { incidents, incidentTimeline } from '@/db/schema';
 import { eq, ne, desc } from 'drizzle-orm';
+import { loadComponentTree } from './db-components';
 import type { Incident, TimelineEntry, IncidentSeverity, IncidentStatus } from './types';
-import { serviceIdsForProduct, resolveProduct } from '@/lib/components';
+import { UMBRELLA_ID } from '@/pulse.config';
 
 /* ── helpers ────────────────────────────────────────────────── */
 
@@ -26,6 +27,25 @@ function mapDbIncident(row: typeof incidents.$inferSelect, timeline: TimelineEnt
   };
 }
 
+/** Walk a component up to its nearest product/organization ancestor id. */
+function ancestorProduct(byId: Map<string, { id: string; parentId: string | null; kind: string }>, id: string): string {
+  let cur = byId.get(id);
+  let orgFallback: string | null = null;
+  while (cur) {
+    if (cur.kind === 'product') return cur.id;
+    if (cur.kind === 'organization') orgFallback = cur.id;
+    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+  }
+  return orgFallback ?? UMBRELLA_ID;
+}
+
+/** Resolve the product for an incident by walking the first affected component up the tree. */
+async function resolveProduct(affects: string[]): Promise<string> {
+  if (affects.length === 0) return UMBRELLA_ID;
+  const byId = await loadComponentTree();
+  return ancestorProduct(byId, affects[0]);
+}
+
 /** Build timeline entries for an incident. */
 async function buildTimeline(incidentId: string): Promise<TimelineEntry[]> {
   const rows = await db.select().from(incidentTimeline)
@@ -36,6 +56,20 @@ async function buildTimeline(incidentId: string): Promise<TimelineEntry[]> {
     body: r.body,
     timestamp: r.at.toISOString(),
   }));
+}
+
+/** All component ids in a product's subtree (the product node + every descendant). */
+async function serviceIdsForProduct(product: string): Promise<string[]> {
+  const byId = await loadComponentTree();
+  const kids = new Map<string, string[]>();
+  for (const r of byId.values()) {
+    if (!r.parentId) continue;
+    (kids.get(r.parentId) ?? kids.set(r.parentId, []).get(r.parentId)!).push(r.id);
+  }
+  const out: string[] = [];
+  const walk = (id: string) => { out.push(id); for (const k of kids.get(id) ?? []) walk(k); };
+  if (byId.has(product)) walk(product);
+  return out;
 }
 
 function affectsProduct(affects: string[], productServiceIds: string[]): boolean {

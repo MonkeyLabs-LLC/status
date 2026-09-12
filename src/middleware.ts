@@ -1,6 +1,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import { resolveScope } from './lib/scope';
-import { verifyCookie, COOKIE_NAME } from './lib/admin-auth';
+import { verifyCookie, COOKIE_NAME, validateSessionWithOwner } from './lib/admin-auth';
+import { pulpOwnerRouteFamilyConfigured } from './lib/pulp-bridge';
 import { SCOPES, UMBRELLA_ID } from './pulse.config';
 import { startScheduler } from './lib/scheduler';
 
@@ -63,8 +64,12 @@ export const onRequest = defineMiddleware(async ({ request, locals, url, cookies
       return redirect('/admin/login');
     }
 
-    const { validateSession } = await import('./lib/admin-auth');
-    const email = await validateSession(sessionId);
+    // Pulp auth sessions are intentionally a new session namespace. Existing
+    // legacy admin cookies require one re-login at cutover and never fall back
+    // to the legacy DB if owner validation fails.
+    const email = pulpOwnerRouteFamilyConfigured('auth')
+      ? await validateSessionWithOwner(sessionId)
+      : await (await import('./lib/admin-auth')).validateSession(sessionId);
     if (!email) {
       cookies.delete(COOKIE_NAME, { path: '/' });
       return redirect('/admin/login');
