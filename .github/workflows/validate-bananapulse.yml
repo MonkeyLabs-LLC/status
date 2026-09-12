@@ -1,0 +1,43 @@
+name: Validate Bananapulse composition
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  composition:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Fetch and verify pinned engine
+        run: |
+          url="$(jq -r .url bananapulse.lock.json)"
+          digest="$(jq -r .sha256 bananapulse.lock.json)"
+          curl --fail --location --silent --show-error "$url" --output /tmp/bananapulse-source.tar.gz
+          echo "$digest  /tmp/bananapulse-source.tar.gz" | sha256sum --check
+          mkdir /tmp/bananapulse-engine
+          tar -xzf /tmp/bananapulse-source.tar.gz -C /tmp/bananapulse-engine --strip-components=1
+
+      - name: Compose instance
+        run: node scripts/compose-bananapulse.mjs --engine /tmp/bananapulse-engine --instance . --output /tmp/status-composed
+
+      - name: Verify composed application
+        working-directory: /tmp/status-composed
+        env:
+          BANANAPULSE_ROOT: /tmp/bananapulse-engine
+          STATUS_ADAPTER: node
+        run: |
+          npm ci
+          npm test
+          npm run check
+          npm run build

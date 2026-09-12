@@ -155,6 +155,7 @@ export const STATUS_PROFILE = defineStatusProfile({
       'bananapulse.host.email.outbox.receipt.apply.v1',
     ],
     profileOwnedPaths: [
+      'src/artifact-composition.test.ts',
       'src/status.profile.ts',
       'src/status.profile.compatibility.test.ts',
       'src/pulse.config.ts',

@@ -1,0 +1,14 @@
+.git
+.github
+.astro
+.netlify
+dist
+node_modules
+.env
+.env.*
+!.env.example
+.claude
+.codegraph
+.codex
+.mcp.json
+*.bundle

@@ -19,10 +19,12 @@ import {
 
 const statusRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const configuredBananapulseRoot = process.env[STATUS_PROFILE.application.localRootEnvironmentKey];
-const bananapulseRoot = resolve(
-  statusRoot,
-  configuredBananapulseRoot || STATUS_PROFILE.application.localRootDefault,
-);
+// Engine-copy parity is an explicit artifact/update gate. Ordinary instance
+// tests must not accidentally compare against whichever branch happens to be
+// checked out in a sibling developer directory.
+const bananapulseRoot = configuredBananapulseRoot
+  ? resolve(statusRoot, configuredBananapulseRoot)
+  : resolve(statusRoot, '.bananapulse-artifact-not-configured');
 
 function normalizedRelative(root: string, path: string): string {
   return relative(root, path).split(sep).join('/');

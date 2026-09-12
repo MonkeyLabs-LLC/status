@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "overlays": [
+    "astro.config.mjs",
+    "netlify",
+    "public/brand",
+    "src/status.profile.ts",
+    "src/status.profile.compatibility.test.ts",
+    "src/pulse.config.ts",
+    "src/middleware.ts",
+    "src/components/skin/SkinML.astro",
+    "src/lib/scheduler.ts",
+    "src/lib/sessions-alert.ts",
+    "src/lib/pulp-bridge.ts",
+    "src/lib/pulp-bridge.test.ts",
+    "src/lib/pulp-monitor-projection.test.ts",
+    "src/lib/skin-copy.ts",
+    "src/pages/admin/maintenance/new.astro",
+    "src/pages/admin/maintenance/[id].astro",
+    "src/pages/api/v1/admin/incidents/leaf-guard.test.ts",
+    "src/styles/brand.css",
+    "src/styles/skins.css"
+  ]
+}
