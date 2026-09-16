@@ -5,11 +5,13 @@ const repository = 'BananaLabs-OSS/Bananapulse';
 const api = `https://api.github.com/repos/${repository}`;
 
 function validLock(lock) {
+  const releaseURL = `https://github.com/${repository}/releases/download/${lock?.version}/bananapulse-source.tar.gz`;
+  const commitURL = `https://codeload.github.com/${repository}/tar.gz/${lock?.revision}`;
   return lock?.schemaVersion === 1
     && /^source-v\d+\.\d+\.\d+$/.test(lock.version)
     && /^[a-f0-9]{40}$/.test(lock.revision)
     && /^[a-f0-9]{64}$/.test(lock.sha256)
-    && lock.url === `https://github.com/${repository}/releases/download/${lock.version}/bananapulse-source.tar.gz`;
+    && (lock.url === releaseURL || lock.url === commitURL);
 }
 
 async function json(url) {
@@ -46,7 +48,7 @@ writeFileSync(lockPath, `${JSON.stringify(next, null, 2)}\n`);
 const dockerfilePath = resolve(root, 'Dockerfile');
 const dockerfile = readFileSync(dockerfilePath, 'utf8');
 const add = `ADD --checksum=sha256:${next.sha256} ${next.url} /tmp/bananapulse-source.tar.gz`;
-const updated = dockerfile.replace(/^ADD --checksum=sha256:[a-f0-9]{64} https:\/\/github\.com\/BananaLabs-OSS\/Bananapulse\/releases\/download\/source-v\d+\.\d+\.\d+\/bananapulse-source\.tar\.gz \/tmp\/bananapulse-source\.tar\.gz$/m, add);
+const updated = dockerfile.replace(/^ADD --checksum=sha256:[a-f0-9]{64} https:\/\/(?:github\.com\/BananaLabs-OSS\/Bananapulse\/releases\/download\/source-v\d+\.\d+\.\d+\/bananapulse-source\.tar\.gz|codeload\.github\.com\/BananaLabs-OSS\/Bananapulse\/tar\.gz\/[a-f0-9]{40}) \/tmp\/bananapulse-source\.tar\.gz$/m, add);
 if (updated === dockerfile) throw new Error('Dockerfile artifact pin was not updated');
 writeFileSync(dockerfilePath, updated);
 console.log(`updated Bananapulse ${current.version} -> ${next.version}`);
