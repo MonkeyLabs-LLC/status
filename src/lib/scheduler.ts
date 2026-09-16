@@ -1,11 +1,13 @@
 /**
- * Internal scheduler — the self-host replacement for the two Netlify scheduled
- * functions (netlify/functions/sweep-cron.mjs + uptimerobot-poll.mjs).
+ * Internal scheduler — the self-host replacement for the three Netlify
+ * scheduled functions (sweep-cron.mjs, uptimerobot-poll.mjs, and
+ * status-probe.mjs).
  *
- * On the @astrojs/node server boot it starts two setInterval loops that POST the
+ * On the @astrojs/node server boot it starts three setInterval loops that call the
  * SAME endpoints the Netlify crons hit:
  *   - POST /api/v1/sweep                         every 5 min  (dead-man/TTL sweep)
  *   - POST /api/v1/ingest/uptimerobot?key=...    every 5 min  (UptimeRobot poll)
+ *   - GET external product routes + one local ingest every 5 min (status probe)
  *
  * GUARD: this only runs under the node adapter (STATUS_ADAPTER === 'node'). On
  * Netlify the scheduled functions own the cadence; running this there too would
@@ -25,8 +27,19 @@ import { STATUS_DOMAIN } from '@/pulse.config';
 
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5 min
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 min
+const STATUS_PROBE_INTERVAL_MS = 5 * 60 * 1000; // 5 min
 // Small stagger so the two jobs don't fire on the exact same tick.
 const POLL_OFFSET_MS = 30 * 1000;
+const STATUS_PROBE_OFFSET_MS = 60 * 1000;
+
+// Customer-facing functional checks. The backend target deliberately uses the
+// aggregate consumed by the storefront rather than process-only /health; this
+// catches a live API whose queue/status workflow is stalled.
+const STATUS_PROBE_TARGETS = [
+  { component: 'backend', url: 'https://api.sessions.gg/api/queue/status' },
+  { component: 'frontend', url: 'https://sessions.gg/' },
+  { component: 'bananadoro', url: 'https://bananadoro.bananalabs.cloud/' },
+] as const;
 
 // Module-scope flag — survives within a single Node process; prevents double-start.
 let started = false;
@@ -153,6 +166,57 @@ async function runUptimeRobotPoll(): Promise<void> {
   );
 }
 
+async function probeFunctionalRoute(url: string): Promise<boolean> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        redirect: 'follow',
+        signal: AbortSignal.timeout(5000),
+      });
+      if (res.ok) return true;
+    } catch {
+      // Retry once so a single network wobble becomes a WATCH candidate only
+      // when it repeats, matching the legacy external prober's behavior.
+    }
+    if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+  return false;
+}
+
+async function runStatusProbe(): Promise<void> {
+  const secret = process.env.UPTIME_HOOK_SECRET;
+  if (!secret) {
+    console.error('[scheduler] UPTIME_HOOK_SECRET not set; skipping status probe.');
+    return;
+  }
+  const probes = await Promise.all(
+    STATUS_PROBE_TARGETS.map(async (target) => ({
+      component: target.component,
+      up: await probeFunctionalRoute(target.url),
+    })),
+  );
+  try {
+    const res = await fetch(
+      `${selfOrigin()}/api/v1/ingest/status-probe?key=${encodeURIComponent(secret)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Host: selfHost() },
+        body: JSON.stringify({ probes }),
+        signal: AbortSignal.timeout(10000),
+      },
+    );
+    const text = await res.text();
+    if (!res.ok) {
+      console.error(`[scheduler] status probe ingest returned ${res.status}: ${text}`);
+      return;
+    }
+    console.log(`[scheduler] status probe ok: ${JSON.stringify(probes)}`);
+  } catch (e) {
+    console.error('[scheduler] status probe ingest failed', e);
+  }
+}
+
 /**
  * Start the internal scheduler. No-op unless STATUS_ADAPTER === 'node' (never on
  * Netlify) and unless already started in this process.
@@ -162,13 +226,15 @@ export function startScheduler(): void {
   if ((process.env.STATUS_ADAPTER ?? 'netlify') !== 'node') return;
   started = true;
 
-  console.log('[scheduler] node adapter — starting internal sweep + uptimerobot poll (5m each).');
+  console.log('[scheduler] node adapter — starting sweep, uptimerobot poll, and functional status probe (5m each).');
 
   // Kick once shortly after boot so the page is fresh without waiting a full
   // interval, then settle into the 5-min cadence.
   setTimeout(() => void runSweep(), 10 * 1000);
   setTimeout(() => void runUptimeRobotPoll(), 10 * 1000 + POLL_OFFSET_MS);
+  setTimeout(() => void runStatusProbe(), 10 * 1000 + STATUS_PROBE_OFFSET_MS);
 
   setInterval(() => void runSweep(), SWEEP_INTERVAL_MS);
   setInterval(() => void runUptimeRobotPoll(), POLL_INTERVAL_MS);
+  setInterval(() => void runStatusProbe(), STATUS_PROBE_INTERVAL_MS);
 }

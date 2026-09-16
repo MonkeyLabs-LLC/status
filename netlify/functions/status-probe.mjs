@@ -26,7 +26,9 @@ export const config = { schedule: '*/5 * * * *' };
 
 // component id  ->  the URL to GET. 2xx/3xx = up. Edit this list to change coverage.
 const TARGETS = [
-  { component: 'backend', url: 'https://api.sessions.gg/health' },
+  // Functional customer route: /health only proves the process is alive and
+  // would miss a stalled queue/status workflow.
+  { component: 'backend', url: 'https://api.sessions.gg/api/queue/status' },
   { component: 'frontend', url: 'https://sessions.gg/' },
   { component: 'bananadoro', url: 'https://bananadoro.bananalabs.cloud/' },
 ];
