@@ -26,6 +26,31 @@ RUN mkdir -p Bananapulse Pulp Pulp-ext-http Pulp-ext-sqlite Pulp-ext-entropy Pul
     && tar -xzf /tmp/pulp-ext-jwt.tar.gz -C Pulp-ext-jwt --strip-components=1 \
     && tar -xzf /tmp/pulp-ext-workers.tar.gz -C Pulp-ext-workers --strip-components=1
 
+# Some legacy Postgres bridges return JSONB as a quoted JSON array. Accept
+# both that historical representation and the canonical direct array.
+RUN sed -i 's/Uptime90D  \[\]bridgeUptimeDay `json:"uptime_90d"`/Uptime90D  legacyUptimeDays  `json:"uptime_90d"`/' /workspace/Bananapulse/pulp-host/legacy_bananapulse_adapters.go \
+    && printf '%s\n' \
+      '' \
+      'type legacyUptimeDays []bridgeUptimeDay' \
+      '' \
+      'func (value *legacyUptimeDays) UnmarshalJSON(raw []byte) error {' \
+      '  var days []bridgeUptimeDay' \
+      '  if err := json.Unmarshal(raw, &days); err == nil {' \
+      '    *value = days' \
+      '    return nil' \
+      '  }' \
+      '  var encoded string' \
+      '  if err := json.Unmarshal(raw, &encoded); err != nil {' \
+      '    return err' \
+      '  }' \
+      '  if err := json.Unmarshal([]byte(encoded), &days); err != nil {' \
+      '    return fmt.Errorf("decode stringified uptime_90d: %w", err)' \
+      '  }' \
+      '  *value = days' \
+      '  return nil' \
+      '}' >> /workspace/Bananapulse/pulp-host/legacy_bananapulse_adapters.go \
+    && gofmt -w /workspace/Bananapulse/pulp-host/legacy_bananapulse_adapters.go
+
 RUN cd /workspace/Pulp \
     && go mod edit \
       -droprequire=github.com/BananaLabs-OSS/Pulp-ext-oauth \
