@@ -58,6 +58,15 @@ RUN sed -i '/^[[:space:]]*FROM observations$/a\            WHERE expires_at IS N
     && sed -i 's/{`SELECT COUNT(\*) FROM observations`, \&counts.Observations, nil}/{`SELECT COUNT(*) FROM observations WHERE expires_at IS NULL OR expires_at > $1`, \&counts.Observations, []any{at}}/' /workspace/Bananapulse/pulp-host/legacy_import_runtime.go \
     && gofmt -w /workspace/Bananapulse/pulp-host/legacy_bananapulse_adapters.go /workspace/Bananapulse/pulp-host/legacy_import_runtime.go
 
+# The legacy store contains incidents attached to aggregate components. The
+# current owner permits incidents only on live service/host leaves, so import
+# the compatible incident/timeline subset and verify against the same subset.
+RUN sed -i "s|SELECT \\* FROM incidents|SELECT i.* FROM incidents i WHERE NOT EXISTS (SELECT 1 FROM unnest(i.affects) AS affected(component_id) LEFT JOIN components c ON c.id = affected.component_id WHERE c.id IS NULL OR c.archived_at IS NOT NULL OR c.kind NOT IN ('service','host'))|" /workspace/Bananapulse/pulp-host/legacy_bananapulse_adapters.go \
+    && sed -i "s|FROM incident_timeline$|FROM incident_timeline JOIN incidents i ON i.id = incident_timeline.incident_id WHERE NOT EXISTS (SELECT 1 FROM unnest(i.affects) AS affected(component_id) LEFT JOIN components c ON c.id = affected.component_id WHERE c.id IS NULL OR c.archived_at IS NOT NULL OR c.kind NOT IN ('service','host'))|" /workspace/Bananapulse/pulp-host/legacy_bananapulse_adapters.go \
+    && sed -i "s|SELECT COUNT(\\*) FROM incidents|SELECT COUNT(*) FROM incidents i WHERE NOT EXISTS (SELECT 1 FROM unnest(i.affects) AS affected(component_id) LEFT JOIN components c ON c.id = affected.component_id WHERE c.id IS NULL OR c.archived_at IS NOT NULL OR c.kind NOT IN ('service','host'))|" /workspace/Bananapulse/pulp-host/legacy_import_runtime.go \
+    && sed -i "s|SELECT COUNT(\\*) FROM incident_timeline|SELECT COUNT(*) FROM incident_timeline JOIN incidents i ON i.id = incident_timeline.incident_id WHERE NOT EXISTS (SELECT 1 FROM unnest(i.affects) AS affected(component_id) LEFT JOIN components c ON c.id = affected.component_id WHERE c.id IS NULL OR c.archived_at IS NOT NULL OR c.kind NOT IN ('service','host'))|" /workspace/Bananapulse/pulp-host/legacy_import_runtime.go \
+    && gofmt -w /workspace/Bananapulse/pulp-host/legacy_bananapulse_adapters.go /workspace/Bananapulse/pulp-host/legacy_import_runtime.go
+
 RUN cd /workspace/Pulp \
     && go mod edit \
       -droprequire=github.com/BananaLabs-OSS/Pulp-ext-oauth \
@@ -86,7 +95,7 @@ COPY --from=build /workspace/Bananapulse/pulp-auth ./pulp-auth
 
 ENV PULP_APP_MANIFEST=/app/application/pulp.app.toml \
     PULP_BRIDGE_ADDR=0.0.0.0:8788 \
-    PULP_STORAGE_ROOT=/data/status-owner-v2 \
+    PULP_STORAGE_ROOT=/data/status-owner-v3 \
     PORT=8788
 
 EXPOSE 8788
