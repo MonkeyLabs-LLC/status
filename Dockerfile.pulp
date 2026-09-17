@@ -1,0 +1,68 @@
+# syntax=docker/dockerfile:1.7
+
+# Railway image for the private Bananapulse Pulp owner. Every source archive is
+# pinned by commit and checksum so a rebuild cannot silently pick up new code.
+FROM golang:1.25.13-bookworm@sha256:e401dae1bf814e29204a8cb7915682e1780951e609ca0dd8865ee1937f510c48 AS build
+
+WORKDIR /workspace
+
+ADD --checksum=sha256:18902ff642ab337f81a39d8d858f5a1034b702173167edbc3d5e61b87d9c3a71 https://codeload.github.com/BananaLabs-OSS/Bananapulse/tar.gz/71d4f482232d1d7fc99e15d92f680c46f84e7213 /tmp/bananapulse.tar.gz
+ADD --checksum=sha256:87e625a4ac90113a4e5bb1512e0384776477eedc665695480751288e70d353e9 https://codeload.github.com/BananaLabs-OSS/Pulp/tar.gz/48429b05ec0e74f00452999c31dd20a7e7b4ffe9 /tmp/pulp.tar.gz
+ADD --checksum=sha256:0d9a443557b7741423bbfb7ee0631caa7fbf136d39823c82f22633d69b151330 https://codeload.github.com/BananaLabs-OSS/Pulp-ext-http/tar.gz/d4e006fbb6f343118de31853f5001fc0ee0f7c2f /tmp/pulp-ext-http.tar.gz
+ADD --checksum=sha256:8af716e2901175fc9782dbbb650c9c40588f4df9da0914d104ea8da50d4ed5e5 https://codeload.github.com/BananaLabs-OSS/Pulp-ext-sqlite/tar.gz/2f0ad7b58136d59cba835b0e21db634535fad441 /tmp/pulp-ext-sqlite.tar.gz
+ADD --checksum=sha256:ffbe4ee8fa1f141c77210a674c1f6f340fe5b774a1e1221d10dee2f0b30ec996 https://codeload.github.com/BananaLabs-OSS/Pulp-ext-entropy/tar.gz/19b7553e45e426170308a9073e7af48bc1a14704 /tmp/pulp-ext-entropy.tar.gz
+ADD --checksum=sha256:34a0497d3a2f99f5174fd1de57feb19e3949379bf28cca8f58c8eb783f806107 https://codeload.github.com/BananaLabs-OSS/Pulp-ext-fs/tar.gz/247372c4dc16699afa03ad32138f0b65baad6f16 /tmp/pulp-ext-fs.tar.gz
+ADD --checksum=sha256:5760fb81465582d5467efe6be22193e54f02fe9bd20426dc11fec865983037e8 https://codeload.github.com/BananaLabs-OSS/Pulp-ext-udp/tar.gz/4b98e3d0ca305d5a529a43824712c08283638b24 /tmp/pulp-ext-udp.tar.gz
+ADD --checksum=sha256:45407a23c3a186d4b7be4b1b2a51dd2f1c703b2601b6559aea892d2eae674724 https://codeload.github.com/BananaLabs-OSS/Pulp-ext-jwt/tar.gz/f080eb52052d903f46792ed05889c55d8f7366fe /tmp/pulp-ext-jwt.tar.gz
+ADD --checksum=sha256:3f49e01276bebf85dd0c6eb0ed0026597eec1e955b761a7b883181740435858d https://codeload.github.com/BananaLabs-OSS/Pulp-ext-workers/tar.gz/75921518d068a2823b5c63fd1af3030cdc86911b /tmp/pulp-ext-workers.tar.gz
+
+RUN mkdir -p Bananapulse Pulp Pulp-ext-http Pulp-ext-sqlite Pulp-ext-entropy Pulp-ext-fs Pulp-ext-udp Pulp-ext-jwt Pulp-ext-workers \
+    && tar -xzf /tmp/bananapulse.tar.gz -C Bananapulse --strip-components=1 \
+    && tar -xzf /tmp/pulp.tar.gz -C Pulp --strip-components=1 \
+    && tar -xzf /tmp/pulp-ext-http.tar.gz -C Pulp-ext-http --strip-components=1 \
+    && tar -xzf /tmp/pulp-ext-sqlite.tar.gz -C Pulp-ext-sqlite --strip-components=1 \
+    && tar -xzf /tmp/pulp-ext-entropy.tar.gz -C Pulp-ext-entropy --strip-components=1 \
+    && tar -xzf /tmp/pulp-ext-fs.tar.gz -C Pulp-ext-fs --strip-components=1 \
+    && tar -xzf /tmp/pulp-ext-udp.tar.gz -C Pulp-ext-udp --strip-components=1 \
+    && tar -xzf /tmp/pulp-ext-jwt.tar.gz -C Pulp-ext-jwt --strip-components=1 \
+    && tar -xzf /tmp/pulp-ext-workers.tar.gz -C Pulp-ext-workers --strip-components=1
+
+# The full Pulp development module includes OAuth/Fiber dependencies used only
+# by test tools and code generators. They are intentionally private and are not
+# imported by this host binary. Remove those unused module-graph edges, then
+# bind the two production transitive extensions that Bananapulse itself does
+# not replace. This keeps the Railway build public-source-only and credential-free.
+RUN cd /workspace/Pulp \
+    && go mod edit \
+      -droprequire=github.com/BananaLabs-OSS/Pulp-ext-oauth \
+      -droprequire=github.com/BananaLabs-OSS/Fiber
+
+WORKDIR /workspace/Bananapulse/pulp-host
+RUN go mod edit \
+      -replace=github.com/BananaLabs-OSS/Pulp-ext-jwt=../../Pulp-ext-jwt \
+      -replace=github.com/BananaLabs-OSS/Pulp-ext-workers=../../Pulp-ext-workers \
+    && CGO_ENABLED=0 go build -mod=mod -buildvcs=false -trimpath -o /out/bananapulse-pulp-host .
+
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 bananapulse \
+    && mkdir -p /app /data \
+    && chown -R bananapulse:bananapulse /app /data
+
+WORKDIR /app
+COPY --from=build /out/bananapulse-pulp-host ./bananapulse-pulp-host
+COPY --from=build /workspace/Bananapulse/application ./application
+COPY --from=build /workspace/Bananapulse/pulp-monitor ./pulp-monitor
+COPY --from=build /workspace/Bananapulse/pulp-subscribers ./pulp-subscribers
+COPY --from=build /workspace/Bananapulse/pulp-auth ./pulp-auth
+
+ENV PULP_APP_MANIFEST=/app/application/pulp.app.toml \
+    PULP_BRIDGE_ADDR=0.0.0.0:8788 \
+    PULP_STORAGE_ROOT=/data \
+    PORT=8788
+
+USER bananapulse
+EXPOSE 8788
+CMD ["./bananapulse-pulp-host"]

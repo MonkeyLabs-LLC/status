@@ -1,76 +1,148 @@
-# Status page → Railway (managed, off Netlify)
+# Status page + Pulp owner on Railway
 
-The status app is a standard Astro SSR server (`@astrojs/node`) in a plain Docker
-image. Railway runs that container; nothing in the code knows it's on Railway, so
-it stays portable (move the same image to a VPS or another host any time).
+The deployment has two services in one Railway project:
 
-**One container serves all three domains** (`status.sessions.gg`,
-`status.monkeylabs.gg`, `status.bananalabs.gg`), themed per domain by Host header.
-You are NOT paying per product.
+- `status-web`: the public Astro SSR status page (`Dockerfile`, `railway.json`).
+- `status-pulp`: the private Bananapulse Pulp owner (`Dockerfile.pulp`,
+  `railway.pulp.json`) with a persistent volume mounted at `/data`.
 
-## Plan
-- **Hobby — $5/mo** (includes $5 usage). A single small always-on container behind
-  Cloudflare cache realistically uses ~$2–4/mo → sits inside the $5.
-- **Set a spend cap** (Railway → Usage) so a runaway container can never surprise-bill.
-- Do NOT use the free **Trial** plan for production — that's the only Railway path that
-  *suspends* when credit runs out. Hobby + a card on file = no lockout (overage just bills).
+One web service serves `status.sessions.gg`, `status.monkeylabs.gg`, and
+`status.bananalabs.gg`, themed by Host header. Only `status-web` receives public
+or custom domains. The web service reaches `status-pulp` over Railway's private
+network.
 
-## Billing model (NOT the Netlify trap)
-Railway meters **resource-time** (RAM/CPU-hours), not per-request invocations. Traffic
-floods hit the running container (cheap, CF-cached) — they cannot blow a usage cap and
-503 you the way Netlify's invocation ceiling did.
+## Cost and account guardrails
 
-## Cutover steps (yours — needs your account / card / DNS)
-1. Create a Railway account → **Hobby** plan + card → set a **spend cap**.
-2. **New Project → Deploy from GitHub repo** → `MonkeyLabs-LLC/status`. Railway detects
-   `railway.json` + `Dockerfile` and builds automatically. (No build config needed — the
-   image runs `node ./dist/server/entry.mjs`; Railway injects `PORT`.)
-3. **Variables** → add the env vars below (Settings → Variables, or paste as a block).
-4. **Settings → Networking → Custom Domain** → add all three:
-   `status.sessions.gg`, `status.monkeylabs.gg`, `status.bananalabs.gg`. Railway gives a
-   CNAME target per domain and issues TLS automatically.
-5. **Cloudflare DNS** → point each `status.*` record at the Railway CNAME target.
-   - Do this with a **low TTL** first; Netlify stays live as fallback until you flip.
-   - Reversible: flip the CNAMEs back to Netlify to roll back.
-6. Verify each domain themes correctly + `/api/status.json` returns data, then idle/
-   delete the Netlify site.
+- Use the Hobby plan with a card on file so Trial-credit exhaustion cannot
+  suspend production.
+- Start `status-pulp` with one replica, 256 MB RAM, and a 1 GB volume.
+- Set a project usage alert/cap. The expected incremental Pulp cost is roughly
+  $2–$5/month, but Railway usage metrics are the source of truth.
 
-## Env vars to set in Railway
-Required:
-```
+## Create the services
+
+1. Keep the existing GitHub-backed service and name it `status-web`. It uses
+   `/railway.json` and `/Dockerfile`.
+2. Add another service from `MonkeyLabs-LLC/status` and name it exactly
+   `status-pulp`.
+3. Set its configuration-as-code path to `/railway.pulp.json`.
+4. Attach a persistent Railway volume to `status-pulp` at `/data`.
+5. Do not generate a public domain for `status-pulp`.
+6. Keep all three custom status domains on `status-web`.
+
+## `status-web` variables
+
+Keep the current web variables:
+
+```env
 DATABASE_URL=<Crunchy status-prod connection string, sslmode=require>
 STATUS_ADAPTER=node
-UPTIME_HOOK_SECRET=<long random — guards /api/v1/sweep + ingest + internal scheduler>
-GRAFANA_HOOK_SECRET=<long random — guards Grafana ingest>
-UPTIMEROBOT_API_KEY=<read-only UptimeRobot key the internal poller reads>
+UPTIME_HOOK_SECRET=<long random secret>
+GRAFANA_HOOK_SECRET=<long random secret>
+UPTIMEROBOT_API_KEY=<read-only UptimeRobot key>
 ADMIN_EMAIL=admin@monkeylabs.gg
-ADMIN_SESSION_SECRET=<random 64-char — admin session signing>
-RESEND_API_KEY=<re_... — magic-link email>
+ADMIN_SESSION_SECRET=<random 64-character secret>
+RESEND_API_KEY=<re_...>
 RESEND_FROM_EMAIL=status@monkeylabs.gg
 RESEND_FROM_NAME=MonkeyLabs Status
 ```
 
-The production profile intentionally remains on the Postgres-backed HTTP owners.
-Do not switch `src/status.profile.ts` to `bananapulse-pulp` until Railway also
-runs the Bananapulse Pulp host and the Astro service has a reachable
-`PULP_BRIDGE_URL` plus matching `PULP_BRIDGE_TOKEN`. The Astro-only image in this
-repository does not provide that bridge by itself.
-Optional (internal-mirror to Evolution site-alert; all have fallbacks):
+After `status-pulp` is healthy and migration verification passes, add:
+
+```env
+PULP_BRIDGE_URL=http://status-pulp.railway.internal:8788
+PULP_BRIDGE_TOKEN=<same generated secret as status-pulp>
+PULP_MONITOR_OWNER_ENABLED=true
+PULP_MONITOR_ADMIN_OWNER_ENABLED=true
+PULP_INGEST_OWNER_ENABLED=true
+PULP_INCIDENTS_OWNER_ENABLED=true
+PULP_MAINTENANCE_OWNER_ENABLED=true
+PULP_SWEEP_OWNER_ENABLED=true
+PULP_SUBSCRIBERS_OWNER_ENABLED=true
+PULP_SUBSCRIBERS_ADMIN_OWNER_ENABLED=true
+PULP_AUTH_OWNER_ENABLED=true
+PULP_SUBSCRIBER_TOKEN_SECRET=<separate generated secret>
 ```
-INTERNAL_SECRET=<long random>
+
+The checked-in profile remains `legacy-copy` deliberately. That makes every
+owner family an explicit environment-gated cutover and keeps the Postgres path
+available until the Pulp deployment has proved healthy.
+
+## `status-pulp` variables
+
+```env
+PULP_BRIDGE_TOKEN=<same generated secret as status-web>
+PULP_BRIDGE_ENABLE_MONITOR_ADMIN=true
+PULP_BRIDGE_ENABLE_MONITOR_INGEST=true
+PULP_BRIDGE_ENABLE_MONITOR_SWEEP=true
+PULP_BRIDGE_ENABLE_SUBSCRIBER_ADMIN=true
+PULP_BRIDGE_ENABLE_MIGRATION=false
+PULP_BRIDGE_ENABLE_AUTH=true
+PULP_BRIDGE_ENABLE_AUTH_ADMIN=true
+PULP_BRIDGE_ENABLE_SOURCE_ADMIN=true
+PULP_SUBSCRIBER_UNSUBSCRIBE_BASE_URL=https://status.monkeylabs.gg
+ADMIN_EMAIL=admin@monkeylabs.gg
+ADMIN_SESSION_SECRET=<same value used by status-web>
+RESEND_API_KEY=<same value used by status-web>
+RESEND_FROM_EMAIL=status@monkeylabs.gg
+RESEND_FROM_NAME=MonkeyLabs Status
+```
+
+The image already sets `PULP_APP_MANIFEST`, `PULP_BRIDGE_ADDR`,
+`PULP_STORAGE_ROOT`, and `PORT`; do not override them.
+
+## One-time legacy-data migration
+
+Before enabling any owner flags on `status-web`, temporarily set these on
+`status-pulp`:
+
+```env
+PULP_LEGACY_IMPORT_ENABLED=true
+PULP_LEGACY_IMPORT_MIGRATION=bananapulse-postgres-v1
+PULP_LEGACY_IMPORT_FENCE=sha256:0ee2c7b52f05c568c3bee1f6a893faeea78b10f8a796ebe506d295c4d7496b73
+PULP_LEGACY_IMPORT_SOURCE_DSN=<existing status-prod DATABASE_URL>
+PULP_LEGACY_IMPORT_REVERIFY_COMPLETED=true
+```
+
+Deploy once. Require successful startup, a healthy `/healthz`, and a non-empty
+monitor projection from the service shell:
+
+```sh
+curl --fail --silent \
+  -H "X-Pulp-Bridge-Token: $PULP_BRIDGE_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{}' \
+  http://127.0.0.1:8788/internal/v1/events/bananapulse.monitor.projection.v1
+```
+
+Then set `PULP_LEGACY_IMPORT_ENABLED=false`, remove
+`PULP_LEGACY_IMPORT_SOURCE_DSN`, and redeploy. Imported owner state remains on
+the `/data` volume. Only then add the bridge and owner flags to `status-web`.
+
+## Verification and rollback
+
+After cutover, require all of these to return 200 and real component data:
+
+```sh
+curl --fail https://status.sessions.gg/
+curl --fail https://status.sessions.gg/api/status.json
+curl --fail https://status.monkeylabs.gg/api/status.json
+curl --fail https://status.bananalabs.gg/api/status.json
+```
+
+Rollback is environment-only: remove or set the `status-web`
+`PULP_*_OWNER_ENABLED` flags to `false`, then redeploy `status-web`. It resumes
+reading the unchanged Postgres owner without deleting Pulp data.
+
+Optional internal mirror variables on `status-web`:
+
+```env
+INTERNAL_SECRET=<long random secret>
 PUBLIC_STATUS_URL=https://status.monkeylabs.gg
 PUBLIC_EVOLUTION_URL=https://api.sessions.gg
 EVOLUTION_INTERNAL_URL=
 ```
-Do NOT set on Railway: `PORT`/`HOST` (Railway injects PORT; Dockerfile binds 0.0.0.0),
-`CF_API_EMAIL`/`CF_DNS_API_TOKEN` (traefik-only — the VPS fallback path).
 
-## Separation notes (independence — the point of a status page)
-- Compute is on Railway (≠ your OVH prod) → an OVH/provider outage can't take status down.
-- DB stays on Crunchy `status-prod` via `DATABASE_URL` (don't use Railway's managed
-  Postgres — keeps the DB independent of the compute host *and* avoids lock).
-- Fast-follow for fuller separation: put `status-prod` in a **different region** (and ideally
-  a separate billing account) from `sessions-prod` — protects against a single AWS-region or
-  account/billing event taking both down.
-- Keep an external watcher (UptimeRobot) on the status page itself — something outside both
-  prod and status must witness it.
+Do not set Cloudflare credentials on Railway. Keep an external monitor on the
+status page itself so an observer outside both production systems can detect a
+status-platform outage.
