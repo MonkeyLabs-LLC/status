@@ -45,7 +45,7 @@ RUN go mod edit \
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y ca-certificates curl \
+    && apt-get install --no-install-recommends -y ca-certificates curl gosu \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 10001 bananapulse \
     && mkdir -p /app /data \
@@ -63,6 +63,5 @@ ENV PULP_APP_MANIFEST=/app/application/pulp.app.toml \
     PULP_STORAGE_ROOT=/data \
     PORT=8788
 
-USER bananapulse
 EXPOSE 8788
-CMD ["./bananapulse-pulp-host"]
+CMD ["sh", "-c", "chown -R bananapulse:bananapulse /data && exec gosu bananapulse ./bananapulse-pulp-host"]

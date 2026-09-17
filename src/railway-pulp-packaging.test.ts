@@ -18,7 +18,8 @@ describe('Railway Pulp service packaging', () => {
   it('runs the bridge privately with persistent state under /data', () => {
     expect(dockerfile).toContain('PULP_BRIDGE_ADDR=0.0.0.0:8788');
     expect(dockerfile).toContain('PULP_STORAGE_ROOT=/data');
-    expect(dockerfile).toContain('USER bananapulse');
+    expect(dockerfile).toContain('chown -R bananapulse:bananapulse /data');
+    expect(dockerfile).toContain('exec gosu bananapulse ./bananapulse-pulp-host');
     expect(config.build.dockerfilePath).toBe('Dockerfile.pulp');
     expect(config.deploy.healthcheckPath).toBe('/healthz');
   });
