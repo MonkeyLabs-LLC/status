@@ -58,7 +58,7 @@ function digest(path: string): string {
 
 test('profile projects the exact existing Status brand and scope behavior', () => {
   expect(STATUS_PROFILE.schemaVersion).toBe(1);
-  expect(STATUS_PROFILE.application.httpSource).toBe('bananapulse-pulp');
+  expect(STATUS_PROFILE.application.httpSource).toBe('legacy-copy');
   expect(STATUS_PROFILE.application.legacyCompatibilityOverrides).toEqual([]);
   expect(STATUS_PROFILE.application.pendingEnginePaths).toEqual([]);
   expect(STATUS_PROFILE.application.bridge).toEqual({

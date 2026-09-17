@@ -24,29 +24,30 @@ afterEach(() => {
 });
 
 describe('Pulp route-family cutover gates', () => {
-  it('requires the composed Pulp owner even when bridge configuration is absent', () => {
+  it('keeps legacy owners active when bridge configuration is absent', () => {
     delete process.env.PULP_BRIDGE_URL;
     delete process.env.PULP_INCIDENTS_OWNER_ENABLED;
-    expect(pulpBridgeConfigured()).toBe(true);
-    expect(pulpOwnerRouteFamilyConfigured('incidents')).toBe(true);
+    expect(pulpBridgeConfigured()).toBe(false);
+    expect(pulpOwnerRouteFamilyConfigured('incidents')).toBe(false);
   });
 
-  it('enables every owner family from the final Status profile', () => {
-    delete process.env.PULP_BRIDGE_URL;
+  it('enables an owner family only with the bridge and its cutover flag', () => {
+    process.env.PULP_BRIDGE_URL = 'http://127.0.0.1:8788';
+    process.env.PULP_INCIDENTS_OWNER_ENABLED = 'true';
     expect(pulpOwnerRouteFamilyConfigured('incidents')).toBe(true);
-    expect(pulpOwnerRouteFamilyConfigured('maintenance')).toBe(true);
-    expect(pulpOwnerRouteFamilyConfigured('auth')).toBe(true);
+    expect(pulpOwnerRouteFamilyConfigured('maintenance')).toBe(false);
+    expect(pulpOwnerRouteFamilyConfigured('auth')).toBe(false);
   });
 
-  it('never falls subscriber lifecycle back to the legacy database', () => {
+  it('keeps subscriber lifecycle on the legacy database until fully configured', () => {
     delete process.env.PULP_BRIDGE_URL;
     delete process.env.PULP_SUBSCRIBER_TOKEN_SECRET;
-    expect(pulpSubscriberLifecycleConfigured()).toBe(true);
+    expect(pulpSubscriberLifecycleConfigured()).toBe(false);
   });
 
-  it('always reads the public monitor projection from Pulp', () => {
+  it('reads the public monitor projection from the legacy database until enabled', () => {
     delete process.env.PULP_BRIDGE_URL;
     delete process.env.PULP_MONITOR_OWNER_ENABLED;
-    expect(pulpMonitorProjectionConfigured()).toBe(true);
+    expect(pulpMonitorProjectionConfigured()).toBe(false);
   });
 });

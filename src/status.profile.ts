@@ -2,8 +2,10 @@
  * Status is an instance profile over the generic Bananapulse application.
  *
  * This is the additive cutover boundary: brand, deployment adapters and the
- * composed application boundary are explicit data. Status requires the Pulp
- * bridge and fails closed rather than returning to its retired local owners.
+ * composed application boundary are explicit data. Production continues to
+ * use the Postgres-backed HTTP owners until the Bananapulse Pulp host is
+ * deployed alongside the Astro service. The bridge remains available behind
+ * its explicit environment gates for that cutover.
  */
 
 export type StatusHTTPSource = 'legacy-copy' | 'bananapulse-pulp';
@@ -120,7 +122,7 @@ export const STATUS_PROFILE = defineStatusProfile({
   },
   application: {
     name: 'bananapulse',
-    httpSource: 'bananapulse-pulp',
+    httpSource: 'legacy-copy',
     localRootEnvironmentKey: 'BANANAPULSE_ROOT',
     localRootDefault: '../Bananapulse',
     manifest: 'application/pulp.app.toml',

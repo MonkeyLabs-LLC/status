@@ -49,6 +49,12 @@ RESEND_API_KEY=<re_... — magic-link email>
 RESEND_FROM_EMAIL=status@monkeylabs.gg
 RESEND_FROM_NAME=MonkeyLabs Status
 ```
+
+The production profile intentionally remains on the Postgres-backed HTTP owners.
+Do not switch `src/status.profile.ts` to `bananapulse-pulp` until Railway also
+runs the Bananapulse Pulp host and the Astro service has a reachable
+`PULP_BRIDGE_URL` plus matching `PULP_BRIDGE_TOKEN`. The Astro-only image in this
+repository does not provide that bridge by itself.
 Optional (internal-mirror to Evolution site-alert; all have fallbacks):
 ```
 INTERNAL_SECRET=<long random>
