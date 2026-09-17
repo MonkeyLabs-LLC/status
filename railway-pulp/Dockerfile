@@ -51,6 +51,13 @@ RUN sed -i 's/Uptime90D  \[\]bridgeUptimeDay `json:"uptime_90d"`/Uptime90D  lega
       '}' >> /workspace/Bananapulse/pulp-host/legacy_bananapulse_adapters.go \
     && gofmt -w /workspace/Bananapulse/pulp-host/legacy_bananapulse_adapters.go
 
+# Expired observations cannot affect current status and importing the complete
+# historical probe stream exhausts the bounded Wasm owner memory. The durable
+# 90-day display history is already carried by each component.
+RUN sed -i '/^[[:space:]]*FROM observations$/a\            WHERE expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP' /workspace/Bananapulse/pulp-host/legacy_bananapulse_adapters.go \
+    && sed -i 's/{`SELECT COUNT(\*) FROM observations`, \&counts.Observations, nil}/{`SELECT COUNT(*) FROM observations WHERE expires_at IS NULL OR expires_at > $1`, \&counts.Observations, []any{at}}/' /workspace/Bananapulse/pulp-host/legacy_import_runtime.go \
+    && gofmt -w /workspace/Bananapulse/pulp-host/legacy_bananapulse_adapters.go /workspace/Bananapulse/pulp-host/legacy_import_runtime.go
+
 RUN cd /workspace/Pulp \
     && go mod edit \
       -droprequire=github.com/BananaLabs-OSS/Pulp-ext-oauth \
@@ -79,7 +86,7 @@ COPY --from=build /workspace/Bananapulse/pulp-auth ./pulp-auth
 
 ENV PULP_APP_MANIFEST=/app/application/pulp.app.toml \
     PULP_BRIDGE_ADDR=0.0.0.0:8788 \
-    PULP_STORAGE_ROOT=/data \
+    PULP_STORAGE_ROOT=/data/status-owner-v2 \
     PORT=8788
 
 EXPOSE 8788
