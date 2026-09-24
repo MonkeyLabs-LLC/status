@@ -71,3 +71,33 @@ Do not publish a CNAME that points to an unregistered Railway hostname.
 
 No customer email, support message, customer data mutation, firewall change,
 DNS change, plan upgrade, or application deployment was performed in this pass.
+
+## Cloudflare path test (user-authorized)
+
+A temporary `workers.dev` diagnostic was deployed with the existing Workers
+permission, without custom routes or DNS changes. It accepted GET only for two
+fixed public status JSON URLs, did not forward caller headers/cookies, used
+`cache: no-store`, retained certificate verification, bounded each origin request
+to five seconds and 64 KiB, and expired after ten minutes. The artifact passed
+Wrangler dry-run validation before deployment.
+
+Eight paired samples per hostname from AI-WORKSPACE gave:
+
+| Route | Sessions | MonkeyLabs |
+| --- | --- | --- |
+| Direct to Railway | 5/8 passed | 4/8 passed |
+| Through Cloudflare Worker (OMA) | 8/8 passed | 8/8 passed |
+
+All seven direct failures timed out during TLS after TCP connection completed.
+Every Cloudflare response verified HTTP 200 and valid JSON from the origin.
+Median end-to-end Cloudflare times were 101 ms (Sessions) and 97 ms (MonkeyLabs).
+No retries were used to hide failures. This supports the Cloudflare-route
+mitigation for the observed network path; it is not proof that production
+orange-cloud routing is configured or that all geographic paths are healthy.
+
+Diagnostic Worker `status-path-test-76f29a23` was successfully deleted immediately
+after the test. Production DNS/application configuration and customer emails
+were unchanged. Raw sample results remain at
+`/tmp/status-cf-path-test/results.json` outside the synced repository.
+DNS-edit access remains necessary to apply and validate the production routing
+change. This evidence entry is local to avoid triggering an unrelated deploy.
