@@ -151,3 +151,34 @@ exact composed `/api/status.json` read handler also exceeded 15 seconds against
 the database. Basic connectivity has recovered, but full status-read latency
 and public availability remain unresolved. This does not establish a particular
 query, locking problem, or provider fault as the cause.
+
+## Status-read bottleneck identified and repaired
+
+Read-only diagnostics subsequently found approximately 511,000 observation rows
+(70 MB heap; 187 MB including indexes). Multiple concurrent latest-observation
+queries had been active for 24–38 seconds. The query used DISTINCT ON over an
+entire component's history, while component enumeration scanned observation
+history again. This establishes an application query bottleneck; it does not
+prove what caused the provider's earlier restart cycle.
+
+The repair seeks the newest row per source with JOIN LATERAL and LIMIT 1 using
+the existing `(source_id,component_id,observed_at)` index. Observed components
+are found through indexed EXISTS probes. Independent public evaluations run
+concurrently through the existing five-connection pool. Expiry, revocation,
+manual overrides and quorum classification remain unchanged. No data deletion,
+index migration, capacity resize or status-owner cutover is required.
+
+The production overlay explicitly includes `src/lib/quorum.ts`. Verification:
+
+- 140 unit tests passed; three existing skips. Type check: zero errors/warnings.
+- `npm run test:queries`: disposable, network-isolated PostgreSQL parity tests
+  with 50,000 historical rows; checks expired latest reads, manual/revoked
+  sources, component isolation and unobserved components. EXPLAIN ANALYZE asserts
+  indexed observation seeks rather than full-history scans. Container removed.
+- Exact production composition built and passed all four outage checks.
+- Production read-only indexed probes took 800 ms and 558 ms respectively.
+- Exact composed status handler against live data returned HTTP 200: cold
+  umbrella read 6,487 ms (seven services), subsequent Sessions read 853 ms (six
+  services). This is pre-deployment handler evidence, not a public-site result.
+
+Public deployment submitted: `0d64f586-e1aa-43b7-b04b-7af94b4de176`.

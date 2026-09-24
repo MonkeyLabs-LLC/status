@@ -128,8 +128,8 @@ export interface ComponentEvaluation {
  * each as live or stale (expired). Returns the per-source reads plus counts.
  */
 export async function evaluateComponent(componentId: string, now = new Date()): Promise<ComponentEvaluation> {
-  // Latest observation per (source) for this component, with the source's metadata.
-  // DISTINCT ON keeps the newest row per source_id.
+  // Seek the latest indexed row for each source instead of scanning and sorting
+  // the component's entire observation history on every page/ingest request.
   const rows = await db.execute<{
     source_id: string;
     name: string;
@@ -142,13 +142,18 @@ export async function evaluateComponent(componentId: string, now = new Date()): 
     observed_at: Date;
     expires_at: Date | null;
   }>(sql`
-    SELECT DISTINCT ON (o.source_id)
+    SELECT
       o.source_id, s.name, s.weight, s.kind, s.trusted, s.revoked_at,
       o.signal, o.detail, o.observed_at, o.expires_at
-    FROM ${observations} o
-    JOIN ${sources} s ON s.id = o.source_id
-    WHERE o.component_id = ${componentId}
-    ORDER BY o.source_id, o.observed_at DESC
+    FROM ${sources} s
+    JOIN LATERAL (
+      SELECT source_id, signal, detail, observed_at, expires_at
+      FROM ${observations}
+      WHERE source_id = s.id AND component_id = ${componentId}
+      ORDER BY observed_at DESC
+      LIMIT 1
+    ) o ON true
+    ORDER BY o.source_id
   `);
 
   const reads: SourceRead[] = [];
@@ -534,7 +539,8 @@ export async function runQuorum(componentId: string, now = new Date()): Promise<
  */
 async function componentsWithSignal(): Promise<string[]> {
   const rows = await db.execute<{ component_id: string }>(sql`
-    SELECT DISTINCT component_id FROM ${observations}
+    SELECT c.id AS component_id FROM ${components} c
+    WHERE EXISTS (SELECT 1 FROM ${observations} o WHERE o.component_id = c.id)
     UNION
     SELECT DISTINCT component_id FROM ${sourceTargetMap}
   `);
@@ -573,17 +579,20 @@ export function evaluationToStatus(ev: ComponentEvaluation): DerivedStatus {
  */
 export async function derivedComponentStatuses(now = new Date()): Promise<Record<string, { status: DerivedStatus; state: QuorumState; reducedCoverage: boolean }>> {
   const rows = await db.execute<{ component_id: string }>(sql`
-    SELECT DISTINCT component_id FROM ${observations}
+    SELECT c.id AS component_id FROM ${components} c
+    WHERE EXISTS (SELECT 1 FROM ${observations} o WHERE o.component_id = c.id)
   `);
   const out: Record<string, { status: DerivedStatus; state: QuorumState; reducedCoverage: boolean }> = {};
-  for (const r of rows) {
+  // Evaluations are independent; the five-connection pool bounds database
+  // concurrency instead of paying every component's network latency in series.
+  await Promise.all(rows.map(async (r) => {
     const ev = await evaluateComponent(r.component_id, now);
     out[r.component_id] = {
       status: evaluationToStatus(ev),
       state: ev.state,
       reducedCoverage: ev.reducedCoverage,
     };
-  }
+  }));
   return out;
 }
 

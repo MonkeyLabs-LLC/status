@@ -14,7 +14,8 @@
     "db:studio": "drizzle-kit studio",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:outage": "STATUS_ADAPTER=node npm run build && node scripts/test-database-outage.mjs"
+    "test:outage": "STATUS_ADAPTER=node npm run build && node scripts/test-database-outage.mjs",
+    "test:queries": "node scripts/test-observation-queries.mjs"
   },
   "dependencies": {
     "@astrojs/netlify": "^6.3.0",
