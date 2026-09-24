@@ -101,3 +101,43 @@ were unchanged. Raw sample results remain at
 `/tmp/status-cf-path-test/results.json` outside the synced repository.
 DNS-edit access remains necessary to apply and validate the production routing
 change. This evidence entry is local to avoid triggering an unrelated deploy.
+
+## Production routing repair completed (2026-09-24, 22:10 UTC)
+
+The user supplied an encrypted credential through Projects. It was decrypted
+only into owner-readable private state outside Projects; no plaintext token was
+printed or copied into source. The active token permits DNS reads/edits but not
+reading the zone SSL setting. Existing TLS settings were left unchanged.
+
+Backed up each exact DNS record privately before changing it. Enabled only
+`proxied: true`, first on `status.sessions.gg` and then, after live verification,
+on `status.monkeylabs.gg`. Both retain their existing Railway CNAME targets,
+record IDs, and TTL. Ownership TXT records, other DNS records, application
+releases, and provider plans were unchanged. Cloudflare readback confirms both
+records are proxied.
+
+Production checks:
+
+- 16/16 requests from AI-WORKSPACE used Cloudflare IPs and returned HTTP 200.
+- 8/8 Sessions requests from the independent VPS used Cloudflare and returned
+  HTTP 200. That VPS initially cached the old MonkeyLabs IP (all eight requests
+  also passed); a further 8/8 requests explicitly used the two newly published
+  Cloudflare IPs with the real MonkeyLabs hostname and certificate verification.
+- Thus all 32 requests verified through Cloudflare passed, with no retries.
+- Public Sessions JSON reported `server: cloudflare`, `cf-cache-status: DYNAMIC`,
+  valid JSON, and HTTP 200 on both Cloudflare addresses.
+- Chromium verified both branded homepages and `/history` pages, plus both
+  `/api/v1/summary.json` endpoints: all HTTP 200, Cloudflare response headers,
+  correct page titles, and zero page JavaScript errors. Initial harness attempts
+  encountered a missing newer Chromium binary and a network-idle timeout;
+  the complete passing run used the installed Chromium executable and DOM
+  readiness, appropriate for pages with continuing network activity.
+- Read-only database check at 22:10:07 UTC: postmaster start still 20:25:08 UTC,
+  seven connections, no other active queries, no deadlocks, no temporary files.
+
+No customer/test email, support message, or database mutation was sent. The
+separate BananaLabs domain-limit/DNS issue remains as described above. This
+routing change addresses the reproduced client-to-Railway path failure; it does
+not claim a proven provider-level cause for past database restarts. Final
+operational evidence is committed locally without retriggering an application
+deployment for a DNS-only repair.
