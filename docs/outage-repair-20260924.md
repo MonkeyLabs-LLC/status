@@ -243,3 +243,29 @@ profile test was updated accordingly. Exact composed verification against the
 pinned engine now passes all 135 tests, type check, and production build.
 GitHub source synchronization also invokes Railway's existing autodeploys for
 both services; subsequent readiness is checked rather than assumed.
+
+## Final follow-up verification (21:26 UTC)
+
+- Source repair and compatibility declarations pushed to private main at
+  `cf489564f2e0b1283f324f54968dcb5b30cf167f`.
+- GitHub run `36061213239`: SUCCESS, including PostgreSQL query-plan checks and
+  all composed application checks.
+- Final public deployment `4072d3b6-b97a-42a1-b3b3-d5a42cc4159a`: SUCCESS.
+- Backend Dockerfile was byte-identical to the already deployed repair. The
+  redundant pending backend build `f8c1445a-3cfe-4103-adbc-207fb52bffab` was
+  explicitly canceled to avoid another import/restart; it and the superseded
+  build are REMOVED. Backend `fcef8311-0679-4e53-90b9-3b96b0ede6d0` remains SUCCESS.
+- At 21:26:42, database start remained 20:25:08 UTC. The three old expensive
+  statement counters stayed at 900/24/20 calls. New latest-row query mean was
+  1.90 ms, component enumeration 0.56 ms, and sweep enumeration 0.30 ms.
+- Both public homepages and JSON endpoints returned 200 in the post-rollout
+  four-endpoint check (0.59–0.71 s). A later Sessions request timed out, while
+  MonkeyLabs returned 200 in 0.45 s. Earlier timed-out requests showed zero TCP
+  connect and TLS completion, so network stability remains unresolved separately
+  from the verified query repair. Independent web-tool checks were inaccessible;
+  the attempted read-only VPS vantage had no usable default SSH identity.
+- No email was sent, no customer data changed, no database configuration was
+  weakened, and no provider restart cause is claimed proven.
+
+This final evidence entry is local; it is not pushed solely to retrigger
+unchanged production services. All application and CI changes above are synced.
