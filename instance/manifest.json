@@ -8,6 +8,8 @@
     "src/status.profile.compatibility.test.ts",
     "src/pulse.config.ts",
     "src/middleware.ts",
+    "src/db/index.ts",
+    "src/pages/[...path].astro",
     "src/components/skin/SkinML.astro",
     "src/lib/scheduler.ts",
     "src/lib/sessions-alert.ts",

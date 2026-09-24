@@ -6,7 +6,14 @@ const url = process.env.DATABASE_URL || '';
 const isLocalhost = url ? (url.includes('localhost') || url.includes('127.0.0.1')) : false;
 
 const client = url
-  ? postgres(url, { idle_timeout: 20, max: 5, ssl: isLocalhost ? false : 'require' })
+  ? postgres(url, {
+      idle_timeout: 20,
+      max: 5,
+      // A stalled database handshake must fail before the public HTTP request
+      // times out, so callers can display their unavailable state.
+      connect_timeout: 5,
+      ssl: isLocalhost ? false : 'require',
+    })
   : postgres({ host: '', database: '' });
 
 export const db = drizzle(client, { schema });
