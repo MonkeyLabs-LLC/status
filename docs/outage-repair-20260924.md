@@ -134,3 +134,20 @@ was sent from this session, and no provider access has been supplied. Account
 benefits were clarified separately: allowance, eligible tiers/durations,
 discount, rollover and stacking must be admin-configurable. That feature is not
 implemented by this status repair.
+
+## Database reports Ready; public retry still fails
+
+After the user reported Ready, a read-only transaction succeeded at
+2026-09-24 19:39:36 UTC. Postgres reported a server start time of 19:08:26 UTC.
+The pooler rejects startup parameters used by an earlier diagnostic (08P01);
+the successful check used `BEGIN READ ONLY` and a transaction-local timeout.
+This diagnostic incompatibility is separate from the earlier CONNECT_TIMEOUT.
+
+The approved public artifact was retried as deployment
+`d4d0c7cf-658c-431a-afb9-d3b29088a63b`. Its image built successfully but all six
+readiness attempts failed with service unavailable; Railway marked it FAILED.
+The previous public revision remains active. An independent invocation of the
+exact composed `/api/status.json` read handler also exceeded 15 seconds against
+the database. Basic connectivity has recovered, but full status-read latency
+and public availability remain unresolved. This does not establish a particular
+query, locking problem, or provider fault as the cause.
