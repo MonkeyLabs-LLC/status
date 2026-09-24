@@ -233,3 +233,13 @@ Some public probes intermittently fail before TCP connection establishment
 (connect/TLS timings both zero), while other requests return 200 in under a
 second. This is separate evidence from database query health; full network
 stability is not established. No customer emails or support messages were sent.
+
+The candidate `abaadd3a-4ec6-4729-8ead-79f54439e89d` passed Railway readiness.
+GitHub source synchronization succeeded. Its database query regression passed
+on the hosted runner, but composition detected three undeclared engine-copy
+differences from the prior outage repairs. The profile now explicitly lists
+those same three manifest overlays as pending engine changes, and the expected
+profile test was updated accordingly. Exact composed verification against the
+pinned engine now passes all 135 tests, type check, and production build.
+GitHub source synchronization also invokes Railway's existing autodeploys for
+both services; subsequent readiness is checked rather than assumed.

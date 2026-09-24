@@ -176,6 +176,11 @@ export const STATUS_PROFILE = defineStatusProfile({
       'src/styles/skins.css',
     ],
     legacyCompatibilityOverrides: [],
-    pendingEnginePaths: [],
+    // Outage repairs carried by this instance until included in a pinned engine release.
+    pendingEnginePaths: [
+      'src/db/index.ts',
+      'src/lib/quorum.ts',
+      'src/pages/[...path].astro',
+    ],
   },
 });
