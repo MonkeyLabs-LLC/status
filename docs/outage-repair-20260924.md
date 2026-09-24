@@ -202,3 +202,34 @@ The alternate hostname `status.bananalabs.gg` failed certificate verification
 issue. The verified restoration covers Sessions and MonkeyLabs status pages.
 The earlier Crunchy restart cause remains unproven; this repair addresses the
 measured application workload, not a claimed provider root cause.
+
+## Follow-up database pressure and regression guard (21:15 UTC)
+
+Read-only production diagnostics found seven connections, no other active queries,
+no deadlocks or temporary files, and the same postmaster start at 20:25:08 UTC.
+The query repair deployment was created at 20:36:50 UTC, after that restart.
+`pg_stat_statements` attributed the highest accumulated cost to the old latest-row
+query (900 calls, mean 28,164 ms) and old component enumeration (mean 35–42 s).
+Two snapshots at 21:16:29 and 21:16:59 showed those old counters unchanged; the
+replacement latest-row query increased from 1,292 to 1,294 calls, averaging
+2.46–2.47 ms. This establishes removal of that workload, not the provider's
+underlying restart cause.
+
+Running the isolated PostgreSQL regression again exposed a remaining planner
+choice: the EXISTS enumeration can use a full observation-history scan. Both
+public enumeration and background sweep enumeration now use ordered, bounded
+lateral lookups. The fixture also checks sweep parity, including mapped-only
+components, and rejects full observation scans for all three query paths. CI
+now runs this real PostgreSQL regression before composition/build.
+
+Validation: query parity and execution-plan regression passed; repository tests
+140 passed with three existing skips; type check zero errors/warnings; exact
+composed Node production build passed. The initial sandboxed test run could not
+execute the existing sed subprocess tests; the permitted rerun passed all tests.
+The public-only candidate deployment is `abaadd3a-4ec6-4729-8ead-79f54439e89d`;
+readiness is pending at this record. Backend sender remains disabled.
+
+Some public probes intermittently fail before TCP connection establishment
+(connect/TLS timings both zero), while other requests return 200 in under a
+second. This is separate evidence from database query health; full network
+stability is not established. No customer emails or support messages were sent.

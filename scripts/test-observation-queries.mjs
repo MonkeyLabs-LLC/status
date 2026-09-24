@@ -9,10 +9,12 @@ function queryAfter(marker) {
   assert.ok(query, `missing query: ${marker}`);
   return query.replaceAll('${observations}', 'observations')
     .replaceAll('${sources}', 'sources').replaceAll('${components}', 'components')
+    .replaceAll('${sourceTargetMap}', 'source_target_map')
     .replaceAll('${componentId}', "'c1'");
 }
 const latest = queryAfter('export async function evaluateComponent(');
 const observed = queryAfter('export async function derivedComponentStatuses(');
+const sweep = queryAfter('async function componentsWithSignal(');
 const container = execFileSync('docker', ['run', '--rm', '--detach', '--network', 'none',
   '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', 'postgres:17-alpine'], { encoding: 'utf8' }).trim();
 try {
@@ -28,10 +30,12 @@ try {
   const sql = `
     CREATE TABLE sources(id text PRIMARY KEY,name text,weight int,kind text,trusted bool,revoked_at timestamptz);
     CREATE TABLE components(id text PRIMARY KEY);
+    CREATE TABLE source_target_map(component_id text);
     CREATE TABLE observations(source_id text,component_id text,signal text,detail text,observed_at timestamptz,expires_at timestamptz);
     CREATE INDEX latest ON observations(source_id,component_id,observed_at);
     CREATE INDEX by_component ON observations(component_id,observed_at);
-    INSERT INTO components VALUES ('c1'),('c2'),('unobserved');
+    INSERT INTO components VALUES ('c1'),('c2'),('unobserved'),('mapped-only');
+    INSERT INTO source_target_map VALUES ('mapped-only'),('c1');
     INSERT INTO sources VALUES ('monitor','Monitor',1,'monitor',true,null),
       ('manual','Manual',1,'manual',true,null),('revoked','Revoked',1,'monitor',false,now()),
       ('empty','No observations',1,'monitor',false,null);
@@ -60,11 +64,19 @@ try {
         SELECT * FROM ((SELECT * FROM actual EXCEPT ALL SELECT * FROM expected)
           UNION ALL (SELECT * FROM expected EXCEPT ALL SELECT * FROM actual)) differences
       ) THEN RAISE EXCEPTION 'observed component parity failed'; END IF;
+      IF EXISTS (
+        WITH actual AS (${sweep}), expected AS (
+          SELECT DISTINCT component_id FROM observations
+          UNION SELECT DISTINCT component_id FROM source_target_map
+        )
+        SELECT * FROM ((SELECT * FROM actual EXCEPT ALL SELECT * FROM expected)
+          UNION ALL (SELECT * FROM expected EXCEPT ALL SELECT * FROM actual)) differences
+      ) THEN RAISE EXCEPTION 'sweep component parity failed'; END IF;
     END $$;
   `;
   execFileSync('docker', ['exec', '-i', container, 'psql', '-X', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1'],
     { input: sql, stdio: ['pipe', 'pipe', 'pipe'], timeout: 30000 });
-  for (const query of [latest, observed]) {
+  for (const query of [latest, observed, sweep]) {
     const plan = JSON.parse(execFileSync('docker', ['exec', container, 'psql', '-X', '-U', 'postgres',
       '-At', '-c', `EXPLAIN (ANALYZE, FORMAT JSON) ${query}`], { encoding: 'utf8', timeout: 10000 }));
     let visited = 0;

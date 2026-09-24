@@ -540,7 +540,10 @@ export async function runQuorum(componentId: string, now = new Date()): Promise<
 async function componentsWithSignal(): Promise<string[]> {
   const rows = await db.execute<{ component_id: string }>(sql`
     SELECT c.id AS component_id FROM ${components} c
-    WHERE EXISTS (SELECT 1 FROM ${observations} o WHERE o.component_id = c.id)
+    JOIN LATERAL (
+      SELECT 1 FROM ${observations} o WHERE o.component_id = c.id
+      ORDER BY o.observed_at DESC LIMIT 1
+    ) observed ON true
     UNION
     SELECT DISTINCT component_id FROM ${sourceTargetMap}
   `);
@@ -580,7 +583,10 @@ export function evaluationToStatus(ev: ComponentEvaluation): DerivedStatus {
 export async function derivedComponentStatuses(now = new Date()): Promise<Record<string, { status: DerivedStatus; state: QuorumState; reducedCoverage: boolean }>> {
   const rows = await db.execute<{ component_id: string }>(sql`
     SELECT c.id AS component_id FROM ${components} c
-    WHERE EXISTS (SELECT 1 FROM ${observations} o WHERE o.component_id = c.id)
+    JOIN LATERAL (
+      SELECT 1 FROM ${observations} o WHERE o.component_id = c.id
+      ORDER BY o.observed_at DESC LIMIT 1
+    ) observed ON true
   `);
   const out: Record<string, { status: DerivedStatus; state: QuorumState; reducedCoverage: boolean }> = {};
   // Evaluations are independent; the five-connection pool bounds database

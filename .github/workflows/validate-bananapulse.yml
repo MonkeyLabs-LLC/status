@@ -19,6 +19,9 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Verify observation query parity and indexed access
+        run: node scripts/test-observation-queries.mjs
+
       - name: Fetch and verify pinned engine
         run: |
           url="$(jq -r .url bananapulse.lock.json)"
