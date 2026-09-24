@@ -182,3 +182,23 @@ The production overlay explicitly includes `src/lib/quorum.ts`. Verification:
   services). This is pre-deployment handler evidence, not a public-site result.
 
 Public deployment submitted: `0d64f586-e1aa-43b7-b04b-7af94b4de176`.
+
+### Deployment verified
+
+Railway marked that deployment SUCCESS. Public homepages returned HTTP 200:
+Sessions 0.74 seconds; MonkeyLabs 0.90 seconds. IPv4 status JSON checks returned
+HTTP 200 with real component data: Sessions six services in 0.46 seconds;
+MonkeyLabs seven services in 0.32 seconds. Two initial urllib JSON attempts had
+TLS handshake timeouts; repeat curl and browser checks succeeded.
+
+Read-only Chromium smoke checks passed on both hosts: homepage, `/history`,
+and `/api/v1/summary.json` returned 200, with no page JavaScript errors. The
+first diagnostic script had a Response.status accessor mistake; it was corrected
+and the complete check rerun successfully. No subscriptions, messages, orders,
+or customer mutations were invoked. The status backend sender remains disabled.
+
+The alternate hostname `status.bananalabs.gg` failed certificate verification
+(self-signed certificate); its TLS/domain configuration is a separate unresolved
+issue. The verified restoration covers Sessions and MonkeyLabs status pages.
+The earlier Crunchy restart cause remains unproven; this repair addresses the
+measured application workload, not a claimed provider root cause.
