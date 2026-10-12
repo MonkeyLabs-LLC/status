@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "version": "source-v1.0.0",
-  "revision": "71d4f482232d1d7fc99e15d92f680c46f84e7213",
-  "url": "https://codeload.github.com/BananaLabs-OSS/Bananapulse/tar.gz/71d4f482232d1d7fc99e15d92f680c46f84e7213",
-  "sha256": "18902ff642ab337f81a39d8d858f5a1034b702173167edbc3d5e61b87d9c3a71"
+  "version": "source-v1.0.1",
+  "revision": "80cbee0c45d90e9da4d8f33c824a7dd0b79cd147",
+  "url": "https://github.com/BananaLabs-OSS/Bananapulse/releases/download/source-v1.0.1/bananapulse-source.tar.gz",
+  "sha256": "15381be40eba7a507b38b78522de1ac4d61ecfbaae333d1b381ce3e7e026357d"
 }
