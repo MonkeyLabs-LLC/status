@@ -15,7 +15,7 @@ WORKDIR /workspace
 
 # This URL and checksum are generated from bananapulse.lock.json. The checksum
 # makes the remote release payload immutable from this build's perspective.
-ADD --checksum=sha256:18902ff642ab337f81a39d8d858f5a1034b702173167edbc3d5e61b87d9c3a71 https://codeload.github.com/BananaLabs-OSS/Bananapulse/tar.gz/71d4f482232d1d7fc99e15d92f680c46f84e7213 /tmp/bananapulse-source.tar.gz
+ADD --checksum=sha256:f24c924b55824cf3bafea8c64e29b1b941f94e6b286b26f0a39f1c26b3ce17ff https://github.com/BananaLabs-OSS/Bananapulse/releases/download/source-v1.0.9/bananapulse-source.tar.gz /tmp/bananapulse-source.tar.gz
 RUN mkdir /tmp/bananapulse-source \
     && tar -xzf /tmp/bananapulse-source.tar.gz -C /tmp/bananapulse-source --strip-components=1
 
