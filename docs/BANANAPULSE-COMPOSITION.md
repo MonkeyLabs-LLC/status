@@ -1,20 +1,15 @@
-# Bananapulse composition
+# Status and Bananapulse
 
-Status is an instance of Bananapulse, not a Git fork that merges engine history.
-Production builds start from the exact release or commit source package in `bananapulse.lock.json`,
-verify its SHA-256 in the Dockerfile, overlay the paths declared by
-`instance/manifest.json`, and build the resulting application normally.
+Status builds its checked-in Astro source for the Node and Netlify adapters.
+Bananapulse supplies the native Go monitor, subscriber and credential owners.
+The web service connects through its authenticated private owner endpoint.
 
-The instance owns branding, host/adapters, Sessions alert integration, and the
-Pulp bridge configuration. All unlisted application paths come from the pinned
-Bananapulse source revision. `src/status.profile.compatibility.test.ts` rejects an
-unaccounted engine-copy difference during an update.
+Build the Go image from the qualified Bananapulse revision with
+`deployment/Dockerfile.status-native`. Build the web image from the Status
+checkout. Keep the owner token private and use the retained subscriber signing
+secret so existing links continue to resolve.
 
-The weekly update workflow only opens a pull request. It never updates
-production directly. The composition workflow downloads the proposed artifact,
-verifies its checksum, runs all tests and type checks, and performs the Node
-production build. Merging the PR is the deployment decision.
-
-Rollback is deterministic: restore `bananapulse.lock.json` and the matching
-Dockerfile `ADD` line from the last known-good commit, then redeploy. No upstream
-merge or source conflict resolution is involved.
+The Status verification workflow checks the checked-in source and builds both
+Astro adapters. See the [deployment and differential test
+procedures](../deploy/status/README.md) for the owner data export and loopback
+parity runs.

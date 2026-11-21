@@ -8,7 +8,7 @@
  * the outage instead of stalling at one vote.
  *
  * It GET-probes the customer-facing endpoints (free outbound fetches), then POSTs
- * ONE batch to /api/v1/ingest/status-probe?key=<UPTIME_HOOK_SECRET>, which feeds
+ * ONE batch to /api/ingest/status-probe?key=<UPTIME_HOOK_SECRET>, which feeds
  * the same core engine (lazy 'Status Prober' source, appendObservation, notify).
  *
  * Cost: this run (1 invocation) + the single ingest POST (1) every 5 min ≈
@@ -61,7 +61,7 @@ export default async function handler() {
   );
 
   try {
-    const res = await fetch(`${base}/api/v1/ingest/status-probe?key=${encodeURIComponent(secret)}`, {
+    const res = await fetch(`${base}/api/ingest/status-probe?key=${encodeURIComponent(secret)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ probes }),

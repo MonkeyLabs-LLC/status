@@ -3,101 +3,80 @@
  * Declare a brand-new incident the monitors missed.
  *
  * A manual declare is NOT a hand-written incident row. It is a high-weight
- * `manual`-source observation routed through recordManualOverride, so it opens
+ * `manual`-source observation routed through the native manual-override operation, so it opens
  * a human-owned (auto=false) incident through the SAME quorum engine the
  * monitors use. The engine owns existence; we only supply the words.
  */
 import AdminShell from '@/layouts/AdminShell.astro';
 import ResourceForm from '@/components/admin/ResourceForm.astro';
 import { getResource } from '@/lib/admin/resources';
-import { getManualSource } from '@/lib/sources';
-import { recordManualOverride, openIncidentFor, type Level } from '@/lib/quorum';
-import { componentExists, isLeafComponent } from '@/lib/components';
 import { componentOptions } from '@/lib/admin/view';
 import { navCounts, propertyOptions } from '@/lib/admin/nav';
-import { pulpOwnerRouteFamilyConfigured } from '@/lib/pulp-bridge';
 import { nanoid } from 'nanoid';
-import {
-  newOwnerCommand,
-  ownerIncident,
-  publishIncidentCommand,
-} from '@/pages/api/v1/incidents/owner';
-import { ownerMaintenanceProjection } from '@/pages/api/v1/maintenance/owner';
-
+import { declaredIncidentID, newOwnerCommand, ownerIncident, publishIncidentCommand, } from '@/lib/incident-owner';
+import { ownerMaintenanceProjection } from '@/lib/maintenance-owner';
 const resource = getResource('incidents')!;
-const who = (Astro.locals as App.Locals).adminEmail ?? 'admin';
-const ownerMode = pulpOwnerRouteFamilyConfigured('incidents');
+const who = (Astro.locals as App.Locals).adminEmail ?? '';
+if (Astro.request.method === 'POST' && !who) return Astro.redirect('/admin/login');
+
 let error = '';
-
 if (Astro.request.method === 'POST') {
-  const form = await Astro.request.formData();
-  const title = form.get('title')?.toString() ?? '';
-  const summary = form.get('summary')?.toString() ?? '';
-  const severity = form.get('severity')?.toString() ?? 'major';
-  const affects = form.getAll('affects').map((a) => a.toString()).filter(Boolean);
-
-  let unknown = '';
-  let nonLeaf = '';
-  if (ownerMode) {
-    const projection = await ownerMaintenanceProjection();
-    const components = new Map((projection.components ?? []).map(({ component }) => [component.id, component]));
-    for (const a of affects) {
-      const component = components.get(a);
-      if (!component || component.archived) { unknown = a; break; }
-      if (component.kind !== 'service' && component.kind !== 'host') { nonLeaf = a; break; }
+    const form = await Astro.request.formData();
+    const title = form.get('title')?.toString() ?? '';
+    const summary = form.get('summary')?.toString() ?? '';
+    const severity = form.get('severity')?.toString() ?? 'major';
+    const affects = form.getAll('affects').map((a) => a.toString()).filter(Boolean);
+    let unknown = '';
+    let nonLeaf = '';
+    {
+        const projection = await ownerMaintenanceProjection();
+        const components = new Map((projection.components ?? []).map(({ component }) => [component.id, component]));
+        for (const a of affects) {
+            const component = components.get(a);
+            if (!component || component.archived) {
+                unknown = a;
+                break;
+            }
+            if (component.kind !== 'service' && component.kind !== 'host') {
+                nonLeaf = a;
+                break;
+            }
+        }
     }
-  } else {
-    for (const a of affects) {
-      if (!(await componentExists(a))) { unknown = a; break; }
-      if (!(await isLeafComponent(a))) { nonLeaf = a; break; }
+    if (!title || !summary || affects.length === 0) {
+        error = 'Title, customer message, and at least one affected component are required.';
     }
-  }
-
-  if (!title || !summary || affects.length === 0) {
-    error = 'Title, customer message, and at least one affected component are required.';
-  } else if (unknown) {
-    error = `Unknown component "${unknown}".`;
-  } else if (nonLeaf) {
-    error = `Component "${nonLeaf}" is not a leaf (declare on a service or host).`;
-  } else if (ownerMode) {
-    const id = nanoid();
-    const now = Math.floor(Date.now() / 1_000);
-    const ownerSeverity = severity === 'major' ? 'major' : 'moderate';
-    const command = newOwnerCommand('open', id, {
-      at_unix: now,
-      incident: {
-        id, title, summary, severity: ownerSeverity, affects,
-        status: 'investigating', auto: false,
-        started_at_unix: now, created_at_unix: now,
-      },
-    });
-    await publishIncidentCommand(command, {
-      eventId: `${id}:opened`,
-      subject: `Investigating: ${title}`,
-      body: summary,
-    });
-    const opened = await ownerIncident(id);
-    if (!opened) throw new Error('Incident owner did not return the declared incident.');
-    return Astro.redirect(`/admin/incidents/${opened.incident.id}`);
-  } else {
-    const level: Level = severity === 'major' ? 'major' : 'degraded';
-    const manual = await getManualSource();
-    // Declare for each affected component via the engine path.
-    // Pass the human title/body straight through; recordManualOverride makes
-    // them the headline even when the engine already opened a templated incident.
-    for (const componentId of affects) {
-      await recordManualOverride({
-        manualSourceId: manual.id, componentId,
-        signal: level === 'major' ? 'down' : 'degraded',
-        level, body: summary, title, author: who,
-      });
+    else if (unknown) {
+        error = `Unknown component "${unknown}".`;
     }
-    const open = await openIncidentFor(affects[0]);
-    if (open) return Astro.redirect(`/admin/incidents/${open.id}`);
-    return Astro.redirect('/admin/incidents');
-  }
+    else if (nonLeaf) {
+        error = `Component "${nonLeaf}" is not a leaf (declare on a service or host).`;
+    }
+    else {
+        const id = nanoid();
+        const nowMillis = Date.now();
+            const now = Math.floor(nowMillis / 1000);
+        const ownerSeverity = severity === 'major' ? 'major' : 'moderate';
+        const command = newOwnerCommand('open', id, {
+            author: who,
+            at_unix: now, at_unix_micros: nowMillis * 1000,
+            incident: {
+                id, title, summary, severity: ownerSeverity, affects,
+                status: 'investigating', auto: false,
+                started_at_unix: now, started_at_unix_millis: nowMillis, created_at_unix: now, created_at_unix_millis: nowMillis,
+            },
+        });
+        const result = await publishIncidentCommand(command, {
+            eventId: `${id}:opened`,
+            subject: `Investigating: ${title}`,
+            body: summary,
+        });
+        const opened = await ownerIncident(declaredIncidentID(result.monitor));
+        if (!opened)
+            throw new Error('Incident owner did not return the declared incident.');
+        return Astro.redirect(`/admin/incidents/${encodeURIComponent(opened.incident.id)}`);
+    }
 }
-
 const components = await componentOptions();
 const counts = await navCounts();
 const properties = await propertyOptions();

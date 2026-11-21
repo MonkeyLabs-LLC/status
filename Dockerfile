@@ -5,28 +5,16 @@
 # server. The Netlify path is unaffected — it never uses this file.
 #
 # Build:  docker build -t status .
-# Run:    docker run -e PORT=8080 -e DATABASE_URL=... -p 8080:8080 status
+# Run with the native owners using deploy/status/docker-compose.yml.
 #
 # Served behind traefik (Let's Encrypt) + Cloudflare; see deploy/status/.
 
 FROM node:22-slim AS build
 
-WORKDIR /workspace
-
-# This URL and checksum are generated from bananapulse.lock.json. The checksum
-# makes the remote release payload immutable from this build's perspective.
-ADD --checksum=sha256:18902ff642ab337f81a39d8d858f5a1034b702173167edbc3d5e61b87d9c3a71 https://codeload.github.com/BananaLabs-OSS/Bananapulse/tar.gz/71d4f482232d1d7fc99e15d92f680c46f84e7213 /tmp/bananapulse-source.tar.gz
-RUN mkdir /tmp/bananapulse-source \
-    && tar -xzf /tmp/bananapulse-source.tar.gz -C /tmp/bananapulse-source --strip-components=1
-
-COPY . /instance
-RUN node /instance/scripts/compose-bananapulse.mjs \
-    --engine /tmp/bananapulse-source \
-    --instance /instance \
-    --output /app
-
 WORKDIR /app
+COPY package.json package-lock.json ./
 RUN npm ci
+COPY . .
 
 # Build with the node adapter selected (default flag is netlify, so we set it
 # explicitly here). Produces ./dist/server/entry.mjs (standalone server).
@@ -37,6 +25,7 @@ FROM node:22-slim AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production
+ENV STATUS_ADAPTER=node
 
 COPY --from=build /app/package.json /app/package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
@@ -50,5 +39,5 @@ EXPOSE 8080
 
 # STATUS_ADAPTER must stay 'node' at runtime too — the internal scheduler is
 # guarded on it (so the 5-min sweep + uptimerobot poll only run here, never on
-# Netlify). Inherited from the ENV above.
+# Netlify).
 CMD ["node", "./dist/server/entry.mjs"]

@@ -5,7 +5,7 @@
  * So instead of receiving a webhook, every 5 minutes we READ each monitor's
  * status via the free API and feed it into the SAME core engine the webhook
  * would have, by POSTing the webhook-shaped payload to
- *   /api/v1/ingest/uptimerobot?key=<UPTIME_HOOK_SECRET>
+ *   /api/ingest/uptimerobot?key=<UPTIME_HOOK_SECRET>
  * (reusing the adapter, secret, lazy source, and mapping already in place).
  *
  * The VANTAGE is still UptimeRobot's global probe network — off your origin, off any on-box monitor
@@ -50,7 +50,7 @@ export default async function handler() {
     console.error('[uptimerobot-poll] no site origin env (URL/DEPLOY_URL); skipping.');
     return new Response('skipped: no origin', { status: 200 });
   }
-  const ingest = `${origin}/api/v1/ingest/uptimerobot?key=${encodeURIComponent(secret)}`;
+  const ingest = `${origin}/api/ingest/uptimerobot?key=${encodeURIComponent(secret)}`;
 
   let monitors = [];
   try {

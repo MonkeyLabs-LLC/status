@@ -12,7 +12,7 @@
  * Discipline note (status §5): the admin is narration + scheduling +
  * configuration + override — never manual status-flipping. So no resource here
  * exposes a "set live status" field; incident state moves flow through the
- * engine via recordManualOverride. Components are config (the tree), not a
+ * engine via the native manual-override operation. Components are config (the tree), not a
  * place to hand-set whether something is up.
  */
 
@@ -59,7 +59,7 @@ export interface ResourceActions {
 }
 
 export interface ResourceDecl {
-  /** URL key under /admin and /api/v1/admin. */
+  /** URL key under /admin and /api/admin. */
   key: string;
   /** Singular + plural labels for chrome. */
   label: string;

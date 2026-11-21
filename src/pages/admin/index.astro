@@ -5,49 +5,35 @@
  * (past TTL / reduced coverage), and recent observations. No status-flipping.
  */
 import AdminShell from '@/layouts/AdminShell.astro';
-import { db } from '@/db';
-import { incidents, components, observations, sources } from '@/db/schema';
-import { ne, desc, sql } from 'drizzle-orm';
-import { pillHtml, fmtDateTime, evaluateAll } from '@/lib/admin/view';
+import { pillHtml, fmtDateTime } from '@/lib/admin/view';
 import { navCounts, propertyOptions } from '@/lib/admin/nav';
-import { monitorAdminOwnerConfigured, monitorOwnerProjection } from '@/pages/api/v1/admin/components/pulp-owner';
-import { incidentProjection, legacyIncident } from '@/pages/api/v1/incidents/owner';
-
+import { monitorOwnerProjection } from '@/lib/admin/monitor-owner';
+import { incidentProjection, legacyIncident } from '@/lib/incident-owner';
 const adminEmail = (Astro.locals as App.Locals).adminEmail ?? 'admin';
 const property = Astro.url.searchParams.get('property') ?? 'all';
-
 // Evaluate every component WITHOUT reconciling (read-only situational snapshot).
-const ownerMode = monitorAdminOwnerConfigured();
-const ownerProjection: any = ownerMode ? await monitorOwnerProjection(true) : null;
+
+const ownerProjection: any = await monitorOwnerProjection(true, 10);
 let evals: any[] = [];
-if (ownerMode) evals = ownerProjection.components.map(({ component, evaluation }: any) => ({
-  componentId: component.id, state: evaluation.state, reducedCoverage: evaluation.reduced_coverage,
-  staleCount: evaluation.stale_count, nonOkCount: evaluation.non_ok_count, totalSources: evaluation.reads.length,
+evals = ownerProjection.components.map(({ component, evaluation }: any) => ({
+    componentId: component.id, state: evaluation.state, reducedCoverage: evaluation.reduced_coverage,
+    staleCount: evaluation.stale_count, nonOkCount: evaluation.non_ok_count, totalSources: (evaluation.reads ?? []).length,
 }));
-else try { evals = await evaluateAll(); } catch { evals = []; }
 const declared = evals.filter((e) => e.state === 'declared');
 const watch = evals.filter((e) => e.state === 'watch');
 const stale = evals.filter((e) => e.reducedCoverage);
-
-const activeIncidents = ownerMode
-  ? ((await incidentProjection()).incidents?.filter((incident) => incident.status !== 'resolved').map(legacyIncident) ?? []).slice(0, 20)
-  : await db.select().from(incidents).where(ne(incidents.status, 'resolved')).orderBy(desc(incidents.startedAt)).limit(20);
-
+const activeIncidents = ((await incidentProjection()).incidents?.filter((incident) => incident.status !== 'resolved').map(legacyIncident) ?? []).slice(0, 20);
 // Map componentId -> name for readable rows.
-const allSvc = ownerMode ? ownerProjection.components.map(({ component }: any) => ({ id: component.id, name: component.name }))
-  : await db.select({ id: components.id, name: components.name }).from(components);
-const nameOf = (id: string) => allSvc.find((s: { id: string; name: string }) => s.id === id)?.name ?? id;
-
+const allSvc = ownerProjection.components.map(({ component }: any) => ({ id: component.id, name: component.name }));
+const nameOf = (id: string) => allSvc.find((s: {
+    id: string;
+    name: string;
+}) => s.id === id)?.name ?? id;
 // Recent observations (last 10) joined with source name.
-const recentObs = ownerMode ? (ownerProjection.observations ?? []).slice(-10).reverse().map((o: any) => ({
-  name: ownerProjection.sources.find((source: any) => source.id === o.source_id)?.name ?? o.source_id,
-  component_id: o.component_id, signal: o.signal, detail: o.detail ?? null, observed_at: new Date(o.observed_at_unix * 1000),
-})) : await db.execute<{ name: string; component_id: string; signal: string; detail: string | null; observed_at: Date }>(sql`
-  SELECT s.name, o.component_id, o.signal, o.detail, o.observed_at
-  FROM ${observations} o JOIN ${sources} s ON s.id = o.source_id
-  ORDER BY o.observed_at DESC LIMIT 10
-`);
-
+const recentObs = (ownerProjection.observations ?? []).map((o: any) => ({
+    name: ownerProjection.sources.find((source: any) => source.id === o.source_id)?.name ?? o.source_id,
+    component_id: o.component_id, signal: o.signal, detail: o.detail ?? null, observed_at: new Date(o.observed_at_unix_micros !== undefined ? Math.floor(o.observed_at_unix_micros / 1000) : o.observed_at_unix * 1000),
+}));
 const counts = await navCounts();
 const properties = await propertyOptions();
 ---
@@ -66,7 +52,7 @@ const properties = await propertyOptions();
     <div class="tr head" style="grid-template-columns:1.6fr .9fr 1fr 30px"><span>Incident</span><span>Severity</span><span>Status</span><span></span></div>
     {activeIncidents.length === 0 && <div class="tr" style="grid-template-columns:1.6fr .9fr 1fr 30px"><span class="muted">No active incidents — the engine sees everything operational.</span></div>}
     {activeIncidents.map((i) => (
-      <a class="tr link" style="grid-template-columns:1.6fr .9fr 1fr 30px" href={`/admin/incidents/${i.id}`}>
+      <a class="tr link" style="grid-template-columns:1.6fr .9fr 1fr 30px" href={`/admin/incidents/${encodeURIComponent(i.id)}`}>
         <span class="t">{i.title}</span>
         <span set:html={pillHtml(i.severity)} />
         <span set:html={pillHtml(i.status)} />
@@ -110,7 +96,7 @@ const properties = await propertyOptions();
         <span class="t">{o.name}</span>
         <span class="muted">{nameOf(o.component_id)}</span>
         <span set:html={pillHtml(o.signal)} />
-        <span class="muted">{fmtDateTime(o.observed_at)}</span>
+        <time class="muted" data-observation-at datetime={o.observed_at.toISOString()}>{fmtDateTime(o.observed_at)}</time>
         <span></span>
       </div>
     ))}

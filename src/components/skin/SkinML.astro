@@ -6,8 +6,11 @@
  * Quiet-when-healthy: operational rows get a grey leg + muted label; only
  * degraded/outage rows carry status color on the capsule leg.
  */
+
+
+
 import type { ScopeView } from '../../lib/view';
-import { STATUS_COLOR, statusWordFor, statusColorFor, severityColor, severityLabel } from '../../lib/skin-copy';
+import { statusWordFor, statusColorFor, severityColor, severityLabel } from '../../lib/skin-copy';
 import { incidentStatusLabel, formatDate, formatTime } from '../../lib/types';
 import SkinCrumbs from './SkinCrumbs.astro';
 import IncidentDetail from './IncidentDetail.astro';
@@ -120,7 +123,7 @@ function barTitle(dayStatus: string, idx: number, len: number): string {
   <>
     <div class="seclbl">Active incidents</div>
     {view.subtreeIncidents.map((i) => (
-      <a class="row" href={`/incident/${i.id}`} style={`--leg:${severityColor(i.severity)}`}>
+      <a class="row" href={`/incident/${encodeURIComponent(i.id)}`} style={`--leg:${severityColor(i.severity)}`}>
         <div>
           <div class="nm">{i.title}</div>
           <div class="kd">{i.affectedName ? `${i.affectedName} · ` : ''}{incidentStatusLabel(i.status).toLowerCase()} · since {formatDate(i.started)} {formatTime(i.started)}</div>
@@ -269,7 +272,7 @@ function barTitle(dayStatus: string, idx: number, len: number): string {
     const col = SEV_COLOR[i.severity] || 'var(--muted)';
     const range = i.start === i.end ? esc(i.start) : `${esc(i.start)} → ${esc(i.end)}`;
     const meta = `${i.affectedName ? esc(i.affectedName) + ' · ' : ''}${range}`;
-    return `<a class="row" href="/incident/${i.id}" style="--leg:${col}"><div><div class="nm">${esc(i.title)}</div><div class="kd">${meta}</div></div><span class="st" style="color:${col}">${SEV_LABEL[i.severity] || esc(i.severity)}</span><span class="chev">›</span></a>`;
+    return `<a class="row" href="/incident/${encodeURIComponent(i.id)}" style="--leg:${col}"><div><div class="nm">${esc(i.title)}</div><div class="kd">${meta}</div></div><span class="st" style="color:${col}">${SEV_LABEL[i.severity] || esc(i.severity)}</span><span class="chev">›</span></a>`;
   }
   // Tap a day → render its incident card(s) into the #daysel panel (like real incidents).
   function selectDay(barEl: Element, barsEl: Element) {

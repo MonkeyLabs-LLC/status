@@ -5,81 +5,54 @@
  */
 import AdminShell from '@/layouts/AdminShell.astro';
 import ResourceForm from '@/components/admin/ResourceForm.astro';
-import { getComponentRow, updateComponentRow, setComponentArchived, ArchiveBlockedError } from '@/lib/db-components';
-import { componentExists, descendantIds } from '@/lib/components';
 import { getResource, COMPONENT_KIND_OPTIONS } from '@/lib/admin/resources';
 import { componentParentOptions } from '@/lib/admin/view';
 import { navCounts, propertyOptions } from '@/lib/admin/nav';
-import { componentAdminRow, monitorAdminCommand, monitorAdminOwnerConfigured, monitorOwnerProjection, ownerRequestID } from '@/pages/api/v1/admin/components/pulp-owner';
-
+import { componentAdminRow, monitorAdminCommand, monitorOwnerProjection, ownerRequestID } from '@/lib/admin/monitor-owner';
 const KINDS = COMPONENT_KIND_OPTIONS.map((o) => o.value);
 const { id } = Astro.params;
-if (!id) return Astro.redirect('/admin/components');
+if (!id)
+    return Astro.redirect('/admin/components');
 const resource = getResource('components')!;
 const adminEmail = (Astro.locals as App.Locals).adminEmail ?? 'admin';
 let error = '';
-
 if (Astro.request.method === 'POST') {
-  const form = await Astro.request.formData();
-  const action = form.get('_action')?.toString();
-  if (monitorAdminOwnerConfigured()) {
-    try {
-      if (action === 'archive' || action === 'unarchive') await monitorAdminCommand({
-        id: ownerRequestID(`admin-component-${action}`, Astro.request, id),
-        kind: action === 'archive' ? 'archive_component' : 'restore_component', component_id: id,
-      });
-      else {
-        const name = form.get('name')?.toString() ?? '';
-        const kind = form.get('kind')?.toString() ?? '';
-        if (!name || !kind) error = 'Name and kind are required.';
-        else if (!KINDS.includes(kind)) error = `Kind must be one of: ${KINDS.join(', ')}.`;
-        else await monitorAdminCommand({ id: ownerRequestID('admin-component-edit', Astro.request, id), kind: 'edit_component', component_patch: {
-          id, name, kind, parent_id: form.get('parentId')?.toString() || '', tag: form.get('tag')?.toString() || '',
-          brand: form.get('brand')?.toString() || '', domain: form.get('domain')?.toString() || '',
-          sort_order: parseInt(form.get('sortOrder')?.toString() ?? '0') || 0,
-        }});
-      }
-      if (!error) return Astro.redirect('/admin/components');
-    } catch (cause) { error = cause instanceof Error ? cause.message : 'Component owner request failed.'; }
-  } else if (action === 'archive') {
-    try { await setComponentArchived(id, true); return Astro.redirect('/admin/components'); }
-    catch (e) { if (e instanceof ArchiveBlockedError) error = e.message; else throw e; }
-  } else if (action === 'unarchive') { await setComponentArchived(id, false); return Astro.redirect('/admin/components'); }
-  else {
-  const name = form.get('name')?.toString() ?? '';
-  const kind = form.get('kind')?.toString() ?? '';
-  const parentId = form.get('parentId')?.toString() || null;
-  if (!name || !kind) {
-    error = 'Name and kind are required.';
-  } else if (!KINDS.includes(kind)) {
-    error = `Kind must be one of: ${KINDS.join(', ')}.`;
-  } else if (parentId && parentId === id) {
-    error = 'A component cannot be its own parent.';
-  } else if (parentId && !(await componentExists(parentId))) {
-    error = `Unknown parent component "${parentId}".`;
-  } else if (parentId && (await descendantIds(id)).includes(parentId)) {
-    error = 'Cannot set a descendant as the parent (would create a cycle).';
-  } else {
-    await updateComponentRow(id, {
-      name, kind,
-      parentId,
-      tag: form.get('tag')?.toString() || null,
-      brand: form.get('brand')?.toString() || null,
-      domain: form.get('domain')?.toString() || null,
-      sortOrder: parseInt(form.get('sortOrder')?.toString() ?? '0') || 0,
-    });
-    return Astro.redirect('/admin/components');
-  }
-  }
+    const form = await Astro.request.formData();
+    const action = form.get('_action')?.toString();
+    {
+        try {
+            if (action === 'archive' || action === 'unarchive')
+                await monitorAdminCommand({
+                    id: ownerRequestID(`admin-component-${action}`, Astro.request, id),
+                    kind: action === 'archive' ? 'archive_component' : 'restore_component', component_id: id,
+                });
+            else {
+                const name = form.get('name')?.toString() ?? '';
+                const kind = form.get('kind')?.toString() ?? '';
+                if (!name || !kind)
+                    error = 'Name and kind are required.';
+                else if (!KINDS.includes(kind))
+                    error = `Kind must be one of: ${KINDS.join(', ')}.`;
+                else
+                    await monitorAdminCommand({ id: ownerRequestID('admin-component-edit', Astro.request, id), kind: 'edit_component', component_patch: {
+                            id, name, kind, parent_id: form.get('parentId')?.toString() || '', tag: form.get('tag')?.toString() || '',
+                            brand: form.get('brand')?.toString() || '', domain: form.get('domain')?.toString() || '',
+                            sort_order: parseInt(form.get('sortOrder')?.toString() ?? '0') || 0,
+                        } });
+            }
+            if (!error)
+                return Astro.redirect('/admin/components');
+        }
+        catch (cause) {
+            error = cause instanceof Error ? cause.message : 'Component owner request failed.';
+        }
+    }
 }
-
-const record = monitorAdminOwnerConfigured()
-  ? (await monitorOwnerProjection(true)).components.map(({ component }) => component).find((component) => component.id === id)
-  : await getComponentRow(id);
-if (!record) return Astro.redirect('/admin/components');
-const formRecord = monitorAdminOwnerConfigured() ? componentAdminRow(record as any) : record;
-const isArchived = monitorAdminOwnerConfigured() ? Boolean((record as any).archived) : Boolean((record as any).archivedAt);
-
+const record = (await monitorOwnerProjection(true)).components.map(({ component }) => component).find((component) => component.id === id);
+if (!record)
+    return Astro.redirect('/admin/components');
+const formRecord = componentAdminRow(record as any);
+const isArchived = Boolean((record as any).archived);
 const componentParents = await componentParentOptions();
 const counts = await navCounts();
 const properties = await propertyOptions();

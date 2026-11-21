@@ -47,6 +47,13 @@ try {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
+  const uptime = await fetch(`http://127.0.0.1:${port}/uptime.txt`, {
+    headers: { Host: 'status.monkeylabs.gg' },
+    signal: AbortSignal.timeout(2000),
+  });
+  assert.equal(uptime.status, 200, 'composed image must include the uptime asset');
+  assert.equal((await uptime.text()).trim(), 'ok');
+  console.log('PASS /uptime.txt: static liveness remains available during database failure');
   for (const host of ['status.sessions.gg', 'status.monkeylabs.gg']) {
     for (const path of ['/', '/api/status.json']) {
       const started = performance.now();

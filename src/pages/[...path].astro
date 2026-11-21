@@ -9,33 +9,33 @@
 import Skin from '../layouts/Skin.astro';
 import ScopeView from '../components/skin/ScopeView.astro';
 import NotFound from '../components/skin/NotFound.astro';
-import { buildComponentView } from '../lib/components';
-import { getMonitorProjection, pulpMonitorProjectionConfigured } from '../lib/pulp-bridge';
-import { buildPulpComponentView } from '../lib/pulp-monitor-projection';
-import { COMPANY } from '../pulse.config';
 
+import { getMonitorProjection } from '../lib/status-client';
+import { buildMonitorComponentView } from '../lib/monitor-projection';
+import { COMPANY } from '../pulse.config';
 const scope = (Astro.locals as any).scope as string | null;
 const raw = Astro.params.path;
 const segs = raw ? raw.split('/').filter(Boolean) : [];
-const ownerSelected = pulpMonitorProjectionConfigured();
+// Unmatched API paths are absent routes, independent of backend availability.
+if (segs[0] === 'api') return new Response('Not found.', {status:404});
 
 let view = null;
 let unavailable = false;
 try {
-  view = ownerSelected
-    ? buildPulpComponentView(await getMonitorProjection(), scope, segs)
-    : await buildComponentView(scope, segs);
-} catch (_e) {
-  // Failure to read either owner is not evidence that the requested page is
-  // missing. Preserve 404 only for a successful lookup with no matching node.
-  unavailable = true;
+    view =
+        buildMonitorComponentView(await getMonitorProjection(), scope, segs);
 }
-if (!view) Astro.response.status = unavailable ? 503 : 404;
+catch (_e) {
+    // Failure to read either owner is not evidence that the requested page is
+    // missing. Preserve 404 only for a successful lookup with no matching node.
+    unavailable = true;
+}
+if (!view)
+    Astro.response.status = unavailable ? 503 : 404;
 if (unavailable) {
-  Astro.response.headers.set('Cache-Control', 'no-store');
-  Astro.response.headers.set('Retry-After', '30');
+    Astro.response.headers.set('Cache-Control', 'no-store');
+    Astro.response.headers.set('Retry-After', '30');
 }
-
 const affectedPath = view ? view.crumbs.map((c) => c.label) : [];
 ---
 <Skin scope={scope} title={view ? `${view.nodeName} Status` : unavailable ? 'Status unavailable' : 'Not found'}>

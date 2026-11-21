@@ -4,11 +4,11 @@ const auth = vi.hoisted(() => ({
   createMagicLink: vi.fn(),
   issueMagicLinkWithOwner: vi.fn(),
 }));
-const bridge = vi.hoisted(() => ({ pulpOwnerRouteFamilyConfigured: vi.fn(() => true) }));
+const bridge = vi.hoisted(() => ({ StatusServiceError: class extends Error { constructor(message:string,readonly status:number){super(message);} } }));
 const email = vi.hoisted(() => ({ sendMagicLinkEmail: vi.fn() }));
 
 vi.mock('@/lib/admin-auth', () => auth);
-vi.mock('@/lib/pulp-bridge', () => bridge);
+vi.mock('@/lib/status-client', () => bridge);
 vi.mock('@/lib/email', () => email);
 
 import { POST } from './request-link';
@@ -60,7 +60,7 @@ describe('admin request-link owner cutover', () => {
   });
 
   it('fails closed when the selected owner cannot accept the command', async () => {
-    auth.issueMagicLinkWithOwner.mockRejectedValue(new Error('bridge unavailable'));
+    auth.issueMagicLinkWithOwner.mockRejectedValue(new bridge.StatusServiceError('owner unavailable',503));
     const response = await POST({
       request: new Request('https://status.example.test/api/admin/request-link', {
         method: 'POST', body: JSON.stringify({ email: 'admin@example.test' }),
@@ -68,7 +68,7 @@ describe('admin request-link owner cutover', () => {
       url: new URL('https://status.example.test/api/admin/request-link'),
     } as any);
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(503);
     expect(auth.createMagicLink).not.toHaveBeenCalled();
     expect(email.sendMagicLinkEmail).not.toHaveBeenCalled();
   });

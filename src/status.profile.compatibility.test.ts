@@ -1,8 +1,7 @@
-import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, relative, resolve, sep } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, test } from 'vitest';
+import { expect, test } from 'vitest';
 import { STATUS_PROFILE } from './status.profile';
 import {
   COMPANY,
@@ -18,58 +17,13 @@ import {
 } from './pulse.config';
 
 const statusRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const configuredBananapulseRoot = process.env[STATUS_PROFILE.application.localRootEnvironmentKey];
-// Engine-copy parity is an explicit artifact/update gate. Ordinary instance
-// tests must not accidentally compare against whichever branch happens to be
-// checked out in a sibling developer directory.
-const bananapulseRoot = configuredBananapulseRoot
-  ? resolve(statusRoot, configuredBananapulseRoot)
-  : resolve(statusRoot, '.bananapulse-artifact-not-configured');
-
-function normalizedRelative(root: string, path: string): string {
-  return relative(root, path).split(sep).join('/');
-}
-
-function filesUnder(root: string, directory: string): string[] {
-  const start = resolve(root, directory);
-  if (!existsSync(start)) return [];
-  const files: string[] = [];
-  const walk = (path: string) => {
-    for (const entry of readdirSync(path)) {
-      const full = resolve(path, entry);
-      if (statSync(full).isDirectory()) walk(full);
-      else files.push(normalizedRelative(root, full));
-    }
-  };
-  walk(start);
-  return files.sort();
-}
-
 function source(path: string): string {
   return readFileSync(path, 'utf8');
 }
 
-function digest(path: string): string {
-  // Composition compares source semantics, not checkout-specific CRLF or
-  // redundant blank lines at EOF.
-  const normalized = readFileSync(path, 'utf8').replace(/\r\n/g, '\n').trimEnd() + '\n';
-  return createHash('sha256').update(normalized).digest('hex');
-}
-
 test('profile projects the exact existing Status brand and scope behavior', () => {
   expect(STATUS_PROFILE.schemaVersion).toBe(1);
-  expect(STATUS_PROFILE.application.httpSource).toBe('legacy-copy');
-  expect(STATUS_PROFILE.application.legacyCompatibilityOverrides).toEqual([]);
-  expect(STATUS_PROFILE.application.pendingEnginePaths).toEqual([
-    'src/db/index.ts',
-    'src/lib/quorum.ts',
-    'src/pages/[...path].astro',
-  ]);
-  expect(STATUS_PROFILE.application.bridge).toEqual({
-    urlEnvironmentKey: 'PULP_BRIDGE_URL',
-    tokenEnvironmentKey: 'PULP_BRIDGE_TOKEN',
-    eventPath: '/internal/v1/events/',
-  });
+  expect(STATUS_PROFILE.application.httpSource).toBe('bananapulse-native');
   expect(STATUS_PROFILE.deployment).toMatchObject({
     site: 'https://status.monkeylabs.gg',
     defaultAdapter: 'netlify',
@@ -115,62 +69,10 @@ test('Status-specific deployment and host adapters remain at the compatibility e
   expect(existsSync(resolve(statusRoot, 'netlify/functions/status-probe.mjs'))).toBe(true);
 });
 
-describe.runIf(existsSync(bananapulseRoot))('local Bananapulse composition compatibility', () => {
-  test('targets the expected Pulp application and complete Lua event surface', () => {
-    const manifest = source(resolve(bananapulseRoot, STATUS_PROFILE.application.manifest));
-    expect(manifest).toMatch(/^name = "bananapulse"$/m);
-    expect(manifest).toMatch(/^require_wasm_sha256 = true$/m);
-    expect(manifest).toContain('lua-orchestrator.cell.toml');
-
-    const lua = source(resolve(bananapulseRoot, 'application/bananapulse.lua'));
-    for (const event of STATUS_PROFILE.application.events) {
-      expect(lua, `missing Bananapulse event ${event}`).toContain(`"${event}"`);
-    }
-  });
-
-  test('keeps the complete HTTP route surface with Pulp as the active owner', () => {
-    const statusRoutes = filesUnder(statusRoot, 'src/pages')
-      .filter((path) => !path.endsWith('.test.ts'))
-      .map((path) => path.slice('src/pages/'.length));
-    const bananapulseRoutes = filesUnder(bananapulseRoot, 'src/pages')
-      .filter((path) => !path.endsWith('.test.ts'))
-      .map((path) => path.slice('src/pages/'.length));
-    expect(bananapulseRoutes).toEqual(statusRoutes);
-
-    expect(source(resolve(statusRoot, 'src/pages/api/status.json.ts'))).toContain(
-      'pulpMonitorProjectionConfigured',
-    );
-    expect(source(resolve(statusRoot, 'src/lib/pulp-bridge.ts'))).toContain(
-      "STATUS_PROFILE.application.httpSource === 'bananapulse-pulp'",
-    );
-    expect(source(resolve(bananapulseRoot, 'src/pages/api/v1/summary.json.ts'))).toContain(
-      'buildPulpSummaryTree',
-    );
-  });
-
-  test('makes every remaining engine-copy difference explicit', () => {
-    const allowed = new Set([
-      ...STATUS_PROFILE.application.profileOwnedPaths,
-      ...STATUS_PROFILE.application.legacyCompatibilityOverrides,
-      ...STATUS_PROFILE.application.pendingEnginePaths,
-    ]);
-    const statusFiles = filesUnder(statusRoot, 'src');
-    const bananapulseFiles = filesUnder(bananapulseRoot, 'src');
-    const union = new Set([...statusFiles, ...bananapulseFiles]);
-    const unexpected: string[] = [];
-
-    for (const path of union) {
-      if (allowed.has(path)) continue;
-      const statusPath = resolve(statusRoot, path);
-      const bananapulsePath = resolve(bananapulseRoot, path);
-      if (!existsSync(statusPath) || !existsSync(bananapulsePath)) {
-        unexpected.push(`${path}: missing from one side`);
-        continue;
-      }
-      if (digest(statusPath) !== digest(bananapulsePath)) {
-        unexpected.push(`${path}: source differs`);
-      }
-    }
-    expect(unexpected).toEqual([]);
-  });
+test('the Status projections and owner client use the native service contract', () => {
+  expect(source(resolve(statusRoot, 'src/pages/api/status.json.ts'))).toContain(
+    'getMonitorProjection()',
+  );
+  const ownerClient = source(resolve(statusRoot, 'src/lib/status-client.ts'));
+  expect(ownerClient).toContain('Authorization: `Bearer ${token}`');
 });

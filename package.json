@@ -9,26 +9,20 @@
     "preview": "astro preview",
     "check": "astro check",
     "astro": "astro",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:outage": "STATUS_ADAPTER=node npm run build && node scripts/test-database-outage.mjs",
-    "test:queries": "node scripts/test-observation-queries.mjs"
+    "test:public": "node scripts/test-public-routing.mjs"
   },
   "dependencies": {
     "@astrojs/netlify": "^6.3.0",
     "@astrojs/node": "^9.0.0",
     "astro": "^5.7.0",
-    "drizzle-orm": "^0.44.0",
-    "nanoid": "^5.1.0",
-    "postgres": "^3.4.5"
+    "nanoid": "^5.1.0"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
     "@types/node": "^22.0.0",
-    "drizzle-kit": "^0.30.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.8"
   }

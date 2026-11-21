@@ -4,21 +4,14 @@
  */
 import AdminShell from '@/layouts/AdminShell.astro';
 import ResourceList from '@/components/admin/ResourceList.astro';
-import { db } from '@/db';
-import { maintenance } from '@/db/schema';
-import { asc } from 'drizzle-orm';
 import { getResource } from '@/lib/admin/resources';
 import { navCounts, propertyOptions } from '@/lib/admin/nav';
 import { fmtDateTime } from '@/lib/admin/view';
-import { pulpOwnerRouteFamilyConfigured } from '@/lib/pulp-bridge';
-import { ownerMaintenanceRows } from '@/pages/api/v1/maintenance/owner';
-
+import { ownerMaintenanceRows } from '@/lib/maintenance-owner';
 const resource = getResource('maintenance')!;
 const adminEmail = (Astro.locals as App.Locals).adminEmail ?? 'admin';
 const property = Astro.url.searchParams.get('property') ?? 'all';
-const rows = pulpOwnerRouteFamilyConfigured('maintenance')
-  ? await ownerMaintenanceRows()
-  : await db.select().from(maintenance).orderBy(asc(maintenance.scheduledStart));
+const rows = await ownerMaintenanceRows();
 const counts = await navCounts();
 const properties = await propertyOptions();
 ---

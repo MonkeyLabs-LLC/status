@@ -33,7 +33,14 @@ curl -H "Host: status.sessions.gg" http://localhost:4321/matches  # should 404
 npm run build
 ```
 
-Deploy to Netlify. Configure domain aliases in Site settings (both `status.monkeylabs.gg` and `status.sessions.gg`).
+Deploy the Astro app to Netlify and configure both domain aliases in Site settings
+(`status.monkeylabs.gg` and `status.sessions.gg`). Netlify builds require the native
+Bananapulse owners. Set these variables for the Functions runtime before cutover.
+
+Set `STATUS_API_URL` to the native owner's HTTPS origin,
+`STATUS_API_TOKEN` to its service credential, and
+`STATUS_SUBSCRIBER_LINK_SECRET` to the existing link-signing secret. Restore
+the owner state using the [database export procedure](deploy/status/README.md#export-existing-owner-state).
 
 ## Adding a new product
 

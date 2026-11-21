@@ -8,10 +8,10 @@
  * types.ts — this file no longer carries a duplicate.
  */
 
-import type {
-  Incident,
-  ServiceStatus,
-} from './types';
+
+
+
+import type { Incident, ServiceStatus } from './types';
 
 /** A node in the rolled-up status tree (product or service). */
 export interface ViewChild {

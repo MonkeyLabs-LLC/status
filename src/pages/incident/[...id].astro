@@ -1,0 +1,63 @@
+---
+/**
+ * Standalone incident detail (/incident/{id}). Crumbs come from the component
+ * tree (the node the incident is attached to); a tappable breadcrumb climbs
+ * back up any level. A missing incident renders a styled not-found.
+ */
+import { decodeIncidentID } from '@/lib/incident-path';
+import Skin from '../../layouts/Skin.astro';
+import SkinCrumbs from '../../components/skin/SkinCrumbs.astro';
+import IncidentDetail from '../../components/skin/IncidentDetail.astro';
+import NotFound from '../../components/skin/NotFound.astro';
+
+
+import { getMonitorProjection } from '../../lib/status-client';
+import { buildMonitorComponentCrumbs, buildMonitorIncident } from '../../lib/monitor-projection';
+import type { CrumbItem } from '../../lib/view';
+import type { Incident } from '../../lib/types';
+const id = decodeIncidentID(Astro.params.id);
+const scope = (Astro.locals as any).scope as string | null;
+
+let incident: Incident | undefined;
+let crumbs: CrumbItem[] = [];
+let affectedPath: string[] = [];
+let unavailable = false;
+try {
+    const projection = await getMonitorProjection();
+    incident = id
+        ?
+            buildMonitorIncident(projection, id)
+        : undefined;
+    if (incident) {
+        const leaf = (incident.affects ?? [])[0];
+        if (leaf) {
+            const ctx = buildMonitorComponentCrumbs(projection, scope, leaf);
+            crumbs = ctx.crumbs;
+            affectedPath = ctx.affectedPath;
+        }
+        crumbs = [...crumbs, { label: incident.title }];
+        if (affectedPath.length === 0)
+            affectedPath = [incident.title];
+    }
+}
+catch (_e) {
+    unavailable = true;
+}
+if (!incident)
+    Astro.response.status = unavailable ? 503 : 404;
+---
+<Skin scope={scope} title={incident ? incident.title : unavailable ? 'Status unavailable' : 'Not found'}>
+  {incident ? (
+    <>
+      <SkinCrumbs crumbs={crumbs} />
+      <IncidentDetail incident={incident} affectedPath={affectedPath} />
+    </>
+  ) : (
+    <NotFound
+      title={unavailable ? 'Status unavailable' : 'Incident not found'}
+      message={unavailable
+        ? 'Incident details are temporarily unavailable. Please try again shortly.'
+        : "That incident doesn't exist or was removed."}
+    />
+  )}
+</Skin>

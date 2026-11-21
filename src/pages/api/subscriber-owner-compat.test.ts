@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/lib/subscribers', () => ({
+const legacySideEffectTrap0=vi.hoisted(() => ({
   addSubscriber: vi.fn(),
   confirmSubscriber: vi.fn(),
   removeSubscriber: vi.fn(),
 }));
-vi.mock('@/lib/pulp-bridge', () => ({
-  pulpSubscriberLifecycleConfigured: vi.fn(() => true),
+vi.mock("@/lib/subscribers",()=>legacySideEffectTrap0);
+vi.mock('@/lib/status-client', () => ({
+  statusSubscriberLifecycleConfigured: vi.fn(() => true),
   subscriberOwnerIdentity: vi.fn(() => ({
     requestId: 'subscribe-request',
     confirmationToken: 'confirm-token',
@@ -18,12 +19,12 @@ vi.mock('@/lib/pulp-bridge', () => ({
   unsubscribeWithOwner: vi.fn(async () => ({ version: 'bananapulse.subscribers/v1', unsubscribed: true })),
 }));
 
-import { addSubscriber, confirmSubscriber, removeSubscriber } from '@/lib/subscribers';
+const {addSubscriber,confirmSubscriber,removeSubscriber}=legacySideEffectTrap0;
 import {
   confirmWithOwner,
   subscribeWithOwner,
   unsubscribeWithOwner,
-} from '@/lib/pulp-bridge';
+} from '@/lib/status-client';
 import { POST as subscribe } from './subscribe';
 import { GET as confirm } from './subscribe/confirm';
 import { GET as unsubscribe } from './unsubscribe';
@@ -31,7 +32,7 @@ import { GET as unsubscribe } from './unsubscribe';
 beforeEach(() => vi.clearAllMocks());
 
 describe('public subscription owner compatibility', () => {
-  it('keeps POST response and validation while routing valid writes through Pulp', async () => {
+  it('keeps POST response and validation while routing valid writes through the Go service', async () => {
     const request = new Request('https://status.example.test/api/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '203.0.113.10' },

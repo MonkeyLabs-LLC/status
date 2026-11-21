@@ -5,8 +5,8 @@
  *
  * On the @astrojs/node server boot it starts three setInterval loops that call the
  * SAME endpoints the Netlify crons hit:
- *   - POST /api/v1/sweep                         every 5 min  (dead-man/TTL sweep)
- *   - POST /api/v1/ingest/uptimerobot?key=...    every 5 min  (UptimeRobot poll)
+ *   - POST /api/sweep                         every 5 min  (dead-man/TTL sweep)
+ *   - POST /api/ingest/uptimerobot?key=...    every 5 min  (UptimeRobot poll)
  *   - GET external product routes + one local ingest every 5 min (status probe)
  *
  * GUARD: this only runs under the node adapter (STATUS_ADAPTER === 'node'). On
@@ -60,7 +60,7 @@ async function runSweep(): Promise<void> {
     console.error('[scheduler] UPTIME_HOOK_SECRET not set; skipping sweep.');
     return;
   }
-  const target = `${selfOrigin()}/api/v1/sweep`;
+  const target = `${selfOrigin()}/api/sweep`;
   try {
     const res = await fetch(target, {
       method: 'POST',
@@ -104,7 +104,7 @@ async function runUptimeRobotPoll(): Promise<void> {
     // Optional vantage — quietly skip if not configured.
     return;
   }
-  const ingest = `${selfOrigin()}/api/v1/ingest/uptimerobot?key=${encodeURIComponent(secret)}`;
+  const ingest = `${selfOrigin()}/api/ingest/uptimerobot?key=${encodeURIComponent(secret)}`;
 
   let monitors: any[] = [];
   try {
@@ -198,7 +198,7 @@ async function runStatusProbe(): Promise<void> {
   );
   try {
     const res = await fetch(
-      `${selfOrigin()}/api/v1/ingest/status-probe?key=${encodeURIComponent(secret)}`,
+      `${selfOrigin()}/api/ingest/status-probe?key=${encodeURIComponent(secret)}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Host: selfHost() },

@@ -4,6 +4,13 @@
 
 import { COMPANY, SITE_TITLE, STATUS_DOMAIN } from '@/pulse.config';
 
+function deliveryAPIKey(): string {
+  if (process.env.STATUS_DELIVERY_ENABLED !== 'true') throw new Error('Status email delivery is disabled');
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error('RESEND_API_KEY not set');
+  return apiKey;
+}
+
 function confirmationHtml(confirmUrl: string): string {
   return `<!DOCTYPE html>
 <html lang="en" style="height:100%;margin:0;">
@@ -37,8 +44,7 @@ function confirmationHtml(confirmUrl: string): string {
 }
 
 export async function sendConfirmationEmail(to: string, confirmUrl: string) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error('RESEND_API_KEY not set');
+  const apiKey = deliveryAPIKey();
 
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? `status@${STATUS_DOMAIN.replace(/^status\./, '')}`;
   const fromName = process.env.RESEND_FROM_NAME ?? SITE_TITLE;
@@ -97,8 +103,7 @@ function magicLinkHtml(magicUrl: string): string {
 }
 
 export async function sendMagicLinkEmail(to: string, magicUrl: string) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error('RESEND_API_KEY not set');
+  const apiKey = deliveryAPIKey();
 
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? `status@${STATUS_DOMAIN.replace(/^status\./, '')}`;
   const fromName = process.env.RESEND_FROM_NAME ?? SITE_TITLE;
@@ -130,8 +135,7 @@ export async function sendMagicLinkEmail(to: string, magicUrl: string) {
  * caller supplies the rendered subject/text/html.
  */
 export async function sendIncidentEmail(to: string, subject: string, text: string, html: string) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error('RESEND_API_KEY not set');
+  const apiKey = deliveryAPIKey();
 
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? `status@${STATUS_DOMAIN.replace(/^status\./, '')}`;
   const fromName = process.env.RESEND_FROM_NAME ?? SITE_TITLE;

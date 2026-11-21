@@ -15,8 +15,8 @@ vi.mock('./admin-auth', () => ({
   validateSession: auth.validateSession,
   validateSessionWithOwner: auth.validateSessionWithOwner,
 }));
-vi.mock('./pulp-bridge', () => ({
-  pulpOwnerRouteFamilyConfigured: bridge.ownerConfigured,
+vi.mock('./status-client', () => ({
+  statusOwnerRouteFamilyConfigured: bridge.ownerConfigured,
 }));
 
 import { adminEmailFromRequest, requireAdmin } from './admin-api';
@@ -41,7 +41,6 @@ describe('admin API auth-owner selection', () => {
     auth.validateSessionWithOwner.mockResolvedValue('admin@example.test');
 
     await expect(adminEmailFromRequest(context())).resolves.toBe('admin@example.test');
-    expect(bridge.ownerConfigured).toHaveBeenCalledWith('auth');
     expect(auth.validateSessionWithOwner).toHaveBeenCalledWith('owner-session-token');
     expect(auth.validateSession).not.toHaveBeenCalled();
   });
@@ -54,13 +53,13 @@ describe('admin API auth-owner selection', () => {
     expect(auth.validateSession).not.toHaveBeenCalled();
   });
 
-  it('retains legacy session validation only when auth-owner mode is off', async () => {
+  it('ignores retired optout and validates only with the native owner', async () => {
     bridge.ownerConfigured.mockReturnValue(false);
-    auth.validateSession.mockResolvedValue('legacy@example.test');
+    auth.validateSessionWithOwner.mockResolvedValue('admin@example.test');
 
-    await expect(adminEmailFromRequest(context())).resolves.toBe('legacy@example.test');
-    expect(auth.validateSession).toHaveBeenCalledWith('owner-session-token');
-    expect(auth.validateSessionWithOwner).not.toHaveBeenCalled();
+    await expect(adminEmailFromRequest(context())).resolves.toBe('admin@example.test');
+    expect(auth.validateSessionWithOwner).toHaveBeenCalledWith('owner-session-token');
+    expect(auth.validateSession).not.toHaveBeenCalled();
   });
 
   it('preserves the 401 envelope for a normal owner-declared invalid session', async () => {

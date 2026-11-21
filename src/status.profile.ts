@@ -1,14 +1,4 @@
-/**
- * Status is an instance profile over the generic Bananapulse application.
- *
- * This is the additive cutover boundary: brand, deployment adapters and the
- * composed application boundary are explicit data. Production continues to
- * use the Postgres-backed HTTP owners until the Bananapulse Pulp host is
- * deployed alongside the Astro service. The bridge remains available behind
- * its explicit environment gates for that cutover.
- */
-
-export type StatusHTTPSource = 'legacy-copy' | 'bananapulse-pulp';
+/** Instance profile for the Bananapulse Astro application. */
 export type StatusAdapter = 'netlify' | 'node';
 
 export interface StatusScopeProfile {
@@ -39,21 +29,7 @@ export interface StatusProfile {
   };
   application: {
     name: 'bananapulse';
-    httpSource: StatusHTTPSource;
-    localRootEnvironmentKey: 'BANANAPULSE_ROOT';
-    localRootDefault: '../Bananapulse';
-    manifest: 'application/pulp.app.toml';
-    orchestratorCell: 'lua-orchestrator';
-    orchestratorProvider: 'orchestrator.dispatch';
-    bridge: {
-      urlEnvironmentKey: 'PULP_BRIDGE_URL';
-      tokenEnvironmentKey: 'PULP_BRIDGE_TOKEN';
-      eventPath: '/internal/v1/events/';
-    };
-    events: readonly string[];
-    profileOwnedPaths: readonly string[];
-    legacyCompatibilityOverrides: readonly string[];
-    pendingEnginePaths: readonly string[];
+    httpSource: 'bananapulse-native';
   };
 }
 
@@ -72,12 +48,6 @@ function defineStatusProfile(profile: StatusProfile): Readonly<StatusProfile> {
     if (hosts.has(scope.host)) throw new Error(`duplicate status scope host ${scope.host}`);
     ids.add(scope.id);
     hosts.add(scope.host);
-  }
-  if (
-    profile.application.httpSource === 'bananapulse-pulp' &&
-    profile.application.legacyCompatibilityOverrides.length > 0
-  ) {
-    throw new Error('Bananapulse HTTP ownership requires zero legacy compatibility overrides');
   }
   return Object.freeze(profile);
 }
@@ -122,65 +92,6 @@ export const STATUS_PROFILE = defineStatusProfile({
   },
   application: {
     name: 'bananapulse',
-    httpSource: 'legacy-copy',
-    localRootEnvironmentKey: 'BANANAPULSE_ROOT',
-    localRootDefault: '../Bananapulse',
-    manifest: 'application/pulp.app.toml',
-    orchestratorCell: 'lua-orchestrator',
-    orchestratorProvider: 'orchestrator.dispatch',
-    bridge: {
-      urlEnvironmentKey: 'PULP_BRIDGE_URL',
-      tokenEnvironmentKey: 'PULP_BRIDGE_TOKEN',
-      eventPath: '/internal/v1/events/',
-    },
-    events: [
-      'bananapulse.monitor.command.v1',
-      'bananapulse.monitor.admin.command.v1',
-      'bananapulse.monitor.migration.import.v1',
-      'bananapulse.monitor.ingest.authenticated.v1',
-      'bananapulse.monitor.sweep.v1',
-      'bananapulse.monitor.query.v1',
-      'bananapulse.monitor.projection.v1',
-      'bananapulse.subscriber.subscribe.v1',
-      'bananapulse.subscriber.confirm.v1',
-      'bananapulse.subscriber.unsubscribe.v1',
-      'bananapulse.subscriber.confirmation.resend.v1',
-      'bananapulse.subscriber.projection.v1',
-      'bananapulse.subscriber.admin.list.v1',
-      'bananapulse.subscriber.admin.get.v1',
-      'bananapulse.subscriber.admin.delete.v1',
-      'bananapulse.subscriber.admin.state.set.v1',
-      'bananapulse.subscriber.migration.import.v1',
-      'bananapulse.incident.publish.v1',
-      'bananapulse.maintenance.publish.v1',
-      'bananapulse.host.email.outbox.claim.v1',
-      'bananapulse.host.email.outbox.receipt.apply.v1',
-    ],
-    profileOwnedPaths: [
-      'src/artifact-composition.test.ts',
-      'src/status.profile.ts',
-      'src/status.profile.compatibility.test.ts',
-      'src/pulse.config.ts',
-      'src/middleware.ts',
-      'src/components/skin/SkinML.astro',
-      'src/lib/scheduler.ts',
-      'src/lib/sessions-alert.ts',
-      'src/lib/pulp-bridge.ts',
-      'src/lib/pulp-bridge.test.ts',
-      'src/lib/pulp-monitor-projection.test.ts',
-      'src/lib/skin-copy.ts',
-      'src/pages/admin/maintenance/new.astro',
-      'src/pages/admin/maintenance/[id].astro',
-      'src/pages/api/v1/admin/incidents/leaf-guard.test.ts',
-      'src/styles/brand.css',
-      'src/styles/skins.css',
-    ],
-    legacyCompatibilityOverrides: [],
-    // Outage repairs carried by this instance until included in a pinned engine release.
-    pendingEnginePaths: [
-      'src/db/index.ts',
-      'src/lib/quorum.ts',
-      'src/pages/[...path].astro',
-    ],
+    httpSource: 'bananapulse-native',
   },
 });

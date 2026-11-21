@@ -1,19 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../lib/db-incidents', () => ({
+const legacySideEffectTrap0=vi.hoisted(() => ({
   getAllIncidents: vi.fn(),
 }));
-vi.mock('../lib/pulp-bridge', () => ({
+vi.mock("../lib/db-incidents",()=>legacySideEffectTrap0);
+vi.mock('../lib/status-client', () => ({
   getMonitorProjection: vi.fn(),
-  pulpMonitorProjectionConfigured: vi.fn(() => true),
+  statusMonitorProjectionConfigured: vi.fn(() => true),
 }));
-vi.mock('../lib/pulp-monitor-projection', () => ({
-  buildPulpIncidentHistory: vi.fn(),
+vi.mock('../lib/monitor-projection', () => ({
+  buildMonitorIncidentHistory: vi.fn(),
 }));
 
-import { getAllIncidents } from '../lib/db-incidents';
-import { getMonitorProjection, pulpMonitorProjectionConfigured } from '../lib/pulp-bridge';
-import { buildPulpIncidentHistory } from '../lib/pulp-monitor-projection';
+const {getAllIncidents}=legacySideEffectTrap0;
+import { getMonitorProjection } from '../lib/status-client';
+import { buildMonitorIncidentHistory } from '../lib/monitor-projection';
 import { GET as getAtom } from './feed.atom';
 import { GET as getJson } from './feed.json';
 import { GET as getXml } from './feed.xml';
@@ -42,15 +43,14 @@ function context() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(pulpMonitorProjectionConfigured).mockReturnValue(true);
   vi.mocked(getMonitorProjection).mockResolvedValue({ version: 'monitor.v1' } as any);
-  vi.mocked(buildPulpIncidentHistory).mockReturnValue({
+  vi.mocked(buildMonitorIncidentHistory).mockReturnValue({
     incidents: [incident] as any,
     total: 1,
   });
 });
 
-describe('public feeds use the Pulp monitor owner projection', () => {
+describe('public feeds use the native monitor owner projection', () => {
   it('preserves the Atom feed shape and escaping without touching legacy storage', async () => {
     const response = await getAtom(context());
     const body = await response.text();
@@ -104,14 +104,13 @@ describe('public feeds use the Pulp monitor owner projection', () => {
     expect(getAllIncidents).not.toHaveBeenCalled();
   });
 
-  it('retains the legacy feed path only when owner mode is not selected', async () => {
-    vi.mocked(pulpMonitorProjectionConfigured).mockReturnValue(false);
+  it('always reads native history without a legacy optout', async () => {
     vi.mocked(getAllIncidents).mockResolvedValue([incident] as any);
 
     const response = await getJson(context());
 
     expect(response.status).toBe(200);
-    expect(getAllIncidents).toHaveBeenCalledWith({ product: undefined, limit: 20 });
-    expect(getMonitorProjection).not.toHaveBeenCalled();
+    expect(getAllIncidents).not.toHaveBeenCalled();
+    expect(getMonitorProjection).toHaveBeenCalledOnce();
   });
 });

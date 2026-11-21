@@ -1,7 +1,7 @@
 /**
  * Netlify scheduled function — the autonomous dead-man / TTL sweep driver.
  *
- * Runs every minute and POSTs to the status app's own `POST /api/v1/sweep`
+ * Runs every minute and POSTs to the status app's own `POST /api/sweep`
  * endpoint with its shared secret. The sweep re-evaluates every component
  * through the quorum engine so that a source going silent past its TTL flips
  * coverage and any auto-incident settles even when NO inbound observation
@@ -10,7 +10,7 @@
  * the sweep endpoint itself.
  *
  * Cron: every 5 minutes. (Was every minute — but at ~2 invocations/min including
- * the downstream /api/v1/sweep call, that alone is ~86k function calls/month and
+ * the downstream /api/sweep call, that alone is ~86k function calls/month and
  * pushed the Netlify account past its free-tier 125k cap → the whole site 503'd
  * "usage_exceeded" 2026-06-18. TTLs are 10 min → 4.5 h, so a 5-min sweep loses no
  * meaningful timeliness while cutting the dominant invocation source ~5×.)
@@ -43,7 +43,7 @@ export default async function handler() {
     return new Response('sweep skipped: no origin', { status: 200 });
   }
 
-  const target = `${origin.replace(/\/$/, '')}/api/v1/sweep`;
+  const target = `${origin.replace(/\/$/, '')}/api/sweep`;
 
   try {
     const res = await fetch(target, {

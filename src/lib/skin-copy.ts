@@ -7,6 +7,9 @@
  * outage | maintenance). The spec's finer-grained "partial" is folded into the
  * existing model: outage → major, degraded → degraded.
  */
+
+
+
 import type { ServiceStatus, IncidentSeverity, IncidentStatus } from './types';
 
 export const STATUS_COLOR: Record<ServiceStatus, string> = {

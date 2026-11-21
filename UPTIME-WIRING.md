@@ -42,7 +42,7 @@ monitors.
 3. URL to Notify (put your Step-1 secret after `key=`):
 
    ```
-   https://status.monkeylabs.gg/api/v1/ingest/uptimerobot?key=YOUR-SECRET-HERE
+   https://status.monkeylabs.gg/api/ingest/uptimerobot?key=YOUR-SECRET-HERE
    ```
 
 4. Choose **POST** and **send as JSON** (a.k.a. "custom JSON / raw"), and set the
@@ -110,5 +110,5 @@ as the component id.
   goes silent mid-outage and never sends the "up".
 - **Back-compat** — the old `{ "service_id", "status" }` shape still works.
 
-(Grafana Cloud uses the sibling endpoint `/api/v1/ingest/grafana`, same `?key=`
+(Grafana Cloud uses the sibling endpoint `/api/ingest/grafana`, same `?key=`
 idea, blocked only on creating the Grafana Cloud account.)
