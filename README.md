@@ -9,9 +9,17 @@ The status page must stay reachable when the main Sessions infrastructure is bro
 ## Local development
 
 ```
-npm install
+npm ci
 npm run dev
 ```
+
+For the local BananaKit stack, build this repository's Dockerfile as
+`bananakit/pulse-web:local`. The backend revision is pinned in
+`.github/native-owner.commit`. Configure `STATUS_API_URL` and
+`STATUS_API_TOKEN` to reach that Bananapulse instance. Use `GET /health`
+for frontend liveness and `GET /api/status.json` for the public projection.
+A fresh backend needs the configured root component before it can serve
+the projected status data.
 
 ## Scope-lock testing
 
@@ -52,7 +60,8 @@ the owner state using the [database export procedure](deploy/status/README.md#ex
 
 ## Wiring real data
 
-Replace the seeded arrays in `src/lib/services.ts`, `incidents.ts`, and `maintenance.ts` with fetches to your status data source. The getter function signatures stay the same.
+Status reads its public projection from Bananapulse. Configure components and
+observations in the backend and use `/api/status.json` to verify the result.
 
 ## DNS
 
