@@ -79,7 +79,7 @@ def check_subscriptions(app, owner_binary):
                 return db.execute('SELECT state FROM subscribers WHERE email = ?', (email,)).fetchall()
         owner = subprocess.Popen([owner_binary.resolve()], env={'PATH': os.environ.get('PATH', '')} | owner_env)
         try:
-            wait(owner_port, '/healthz', owner, 200)
+            wait(owner_port, '/health', owner, 200)
             web = subprocess.Popen([args.node, 'dist/server/entry.mjs'], cwd=app, env={'PATH': os.environ.get('PATH', '')} | web_env)
             try:
                 wait(web_port, '/api/subscribe/confirm', web, 400)

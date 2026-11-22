@@ -49,9 +49,7 @@ services:
       context: ../..
       dockerfile: Dockerfile
     healthcheck:
-      # The status route returns 503 when its data is unavailable, but the
-      # web process is still live while it serves that response.
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/status.json',{headers:{host:'status.monkeylabs.gg'}}).then(r=>process.exit([200,503].includes(r.status)?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -58,6 +58,7 @@ check "$BASE/matches"
 check "$BASE/rooms"
 check "$BASE/history"
 check "$BASE/feed.xml"
+check "$BASE/health"
 check "$BASE/api/status.json"
 
 echo ""

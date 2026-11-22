@@ -47,7 +47,7 @@ def stop(process):
             process.kill()
             process.wait()
 
-def launch(stack, command, settings, listen, cwd=None, health='/healthz', health_status=200):
+def launch(stack, command, settings, listen, cwd=None, health='/health', health_status=200):
     process = subprocess.Popen(command, cwd=cwd, env={'PATH': os.environ.get('PATH', ''), 'NODE_ENV': 'production', 'RESEND_API_KEY': '', **settings})
     stack.callback(stop, process)
     for _ in range(120):
