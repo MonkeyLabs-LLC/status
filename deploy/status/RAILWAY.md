@@ -1,6 +1,6 @@
 # Status on Railway
 
-Build `status-web` from this repository with `/railway.json`. Build
+Build `status-web` from this repository with its Dockerfile and the persistent Railway service settings. Build
 `status-owners` from the Bananapulse revision containing
 `deployment/Dockerfile.status-native`. Attach the public status domains to
 `status-web` and connect to the owner over Railway's private network.
@@ -20,7 +20,7 @@ Build `status-web` from this repository with `/railway.json`. Build
 | `STATUS_DELIVERY_ENABLED` | `false` on the owner during migration |
 
 Give the owner a volume writable by UID 10001. Use `/health` for the rebuilt
-native owner and for the Astro web probe in [railway.json](../../railway.json).
+native owner and for the Astro web probe. Set the web probe timeout to 120 seconds.
 The public status feed remains at `/api/status.json`. The retained rollback
 owner image uses `/healthz`.
 [Export the existing owner databases](README.md#export-existing-owner-state)
