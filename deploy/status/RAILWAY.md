@@ -19,8 +19,10 @@ Build `status-web` from this repository with `/railway.json`. Build
 | `STATUS_SUBSCRIBER_LINK_SECRET` | Existing link-signing secret on the web service |
 | `STATUS_DELIVERY_ENABLED` | `false` on the owner during migration |
 
-Give the owner a volume writable by UID 10001 and configure `/health` as its
-health check. The web service uses `/health`. The public status data endpoint is `/api/status.json`.
+Give the owner a volume writable by UID 10001. Use `/health` for the rebuilt
+native owner and for the Astro web probe in [railway.json](../../railway.json).
+The public status feed remains at `/api/status.json`. The retained rollback
+owner image uses `/healthz`.
 [Export the existing owner databases](README.md#export-existing-owner-state)
 before routing traffic. Verify the restored component, incident and subscriber
 state independently of the health checks.
